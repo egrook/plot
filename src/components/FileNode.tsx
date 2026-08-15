@@ -1,5 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { File } from "lucide-react";
+import { SpacePlanBadges } from "@/components/SpacePlanBadges";
 import { Badge } from "@/components/ui/badge";
 import { fileBadge, fileExtFromSpace } from "@/lib/files";
 import { cn } from "@/lib/utils";
@@ -29,9 +30,12 @@ export default function FileNode({ data, selected }: NodeProps<FileFlowNode>) {
         </>
       )}
       <File className="text-muted-foreground size-5 shrink-0" />
-      <h3 className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
-        {data.title || "Untitled file"}
-      </h3>
+      <div className="min-w-0 flex-1">
+        <h3 className="truncate text-sm font-medium leading-tight">
+          {data.title || "Untitled file"}
+        </h3>
+        <SpacePlanBadges status={data.status} dueOn={data.dueOn} className="mt-0.5" />
+      </div>
       <Badge variant="secondary" className="shrink-0 text-[10px]">
         {fileBadge(ext)}
       </Badge>

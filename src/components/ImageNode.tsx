@@ -1,5 +1,6 @@
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import { ImageIcon } from "lucide-react";
+import { SpacePlanBadges } from "@/components/SpacePlanBadges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,7 @@ export default function ImageNode({ data, selected }: NodeProps<ImageFlowNode>) 
           <h3 className="mt-1 truncate text-base leading-tight">
             {data.title || "Image"}
           </h3>
+          <SpacePlanBadges status={data.status} dueOn={data.dueOn} className="mt-1" />
         </div>
         <Button
           size="icon-sm"

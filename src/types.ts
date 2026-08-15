@@ -53,6 +53,7 @@ export type PublicLink = {
 };
 
 export type SpaceType = "markdown" | "excalidraw" | "image" | "file";
+export type SpaceStatus = "todo" | "doing" | "blocked" | "done";
 
 export type SpaceNode = {
   id: string;
@@ -66,6 +67,8 @@ export type SpaceNode = {
   width: number;
   height: number;
   borderColor: string;
+  status: SpaceStatus | "";
+  dueOn: string;
   createdAt: number;
   updatedAt: number;
   deletedAt?: number;
@@ -119,6 +122,8 @@ export type SpaceNodeData = {
   preview: string | null;
   spaceType: SpaceType;
   borderColor: string;
+  status: SpaceStatus | "";
+  dueOn: string;
   readOnly?: boolean;
   onOpen: () => void;
   onResize: (width: number, height: number) => void;

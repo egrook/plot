@@ -92,6 +92,60 @@ function asNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function parseSpaceStatus(value: unknown): "todo" | "doing" | "blocked" | "done" | "" | null {
+  if (value === undefined) return null;
+  if (value === "todo" || value === "doing" || value === "blocked" || value === "done") {
+    return value;
+  }
+  if (value === "" || value === null) return "";
+  return null;
+}
+
+function isRealDueStamp(
+  year: number,
+  month: number,
+  day: number,
+  hour?: number,
+  minute?: number,
+) {
+  if (!Number.isInteger(year) || year < 1 || year > 9999) return false;
+  if (!Number.isInteger(month) || month < 1 || month > 12) return false;
+  if (!Number.isInteger(day) || day < 1 || day > 31) return false;
+  if (hour !== undefined && (!Number.isInteger(hour) || hour < 0 || hour > 23)) {
+    return false;
+  }
+  if (minute !== undefined && (!Number.isInteger(minute) || minute < 0 || minute > 59)) {
+    return false;
+  }
+  const date = new Date(year, month - 1, day, hour ?? 0, minute ?? 0);
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day &&
+    (hour === undefined || date.getHours() === hour) &&
+    (minute === undefined || date.getMinutes() === minute)
+  );
+}
+
+function parseDueOn(value: unknown): string | null {
+  if (value === undefined) return null;
+  if (value === null || value === "") return "";
+  const raw = asString(value).trim();
+  const dateTime = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/);
+  if (dateTime) {
+    const [, year, month, day, hour, minute] = dateTime;
+    if (!isRealDueStamp(+year, +month, +day, +hour, +minute)) return null;
+    return `${year}-${month}-${day}T${hour}:${minute}`;
+  }
+  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnly) {
+    const [, year, month, day] = dateOnly;
+    if (!isRealDueStamp(+year, +month, +day)) return null;
+    return `${year}-${month}-${day}`;
+  }
+  return null;
+}
+
 function usernameOk(name: string) {
   return /^[a-zA-Z0-9_]{3,32}$/.test(name);
 }
@@ -796,6 +850,8 @@ api.post("/projects/:id/duplicate", async (c) => {
       node.width,
       node.height,
       node.border_color,
+      node.status || "todo",
+      parseDueOn(node.due_on ?? "") ?? "",
       t,
       t,
     );
@@ -1096,6 +1152,8 @@ api.post("/projects/:id/snapshots/:snapshotId/restore", async (c) => {
       Number(node.width) || 320,
       Number(node.height) || 240,
       asString(node.border_color),
+      parseSpaceStatus(node.status) ?? "",
+      parseDueOn(node.due_on ?? "") ?? "",
       Number(node.created_at) || t,
       t,
     );
@@ -1546,6 +1604,14 @@ api.post("/projects/:id/nodes", async (c) => {
     asNumber(body.height) ??
     (type === "markdown" ? 280 : type === "image" ? 280 : type === "file" ? 88 : 300);
 
+  if (body.status !== undefined && parseSpaceStatus(body.status) === null) {
+    return c.json({ error: "Status must be todo, doing, blocked, or done." }, 400);
+  }
+  const rawDue = body.dueOn !== undefined ? body.dueOn : body.due_on;
+  if (rawDue !== undefined && rawDue !== null && rawDue !== "" && parseDueOn(rawDue) === null) {
+    return c.json({ error: "Due date must include a valid date and time." }, 400);
+  }
+
   await queries.createNode.run(
     id,
     project.id,
@@ -1558,6 +1624,8 @@ api.post("/projects/:id/nodes", async (c) => {
     width,
     height,
     asString(body.borderColor),
+    parseSpaceStatus(body.status) ?? "todo",
+    parseDueOn(body.dueOn !== undefined ? body.dueOn : body.due_on ?? "") ?? "",
     t,
     t,
   );
@@ -1589,6 +1657,20 @@ api.patch("/projects/:id/nodes/:nodeId", async (c) => {
   const height = body.height === undefined ? null : asNumber(body.height);
   const borderColor =
     body.borderColor === undefined ? null : asString(body.borderColor);
+  if (body.status !== undefined && parseSpaceStatus(body.status) === null) {
+    return c.json({ error: "Status must be todo, doing, blocked, or done." }, 400);
+  }
+  const status = parseSpaceStatus(body.status);
+  if (body.dueOn !== undefined || body.due_on !== undefined) {
+    const rawDue = body.dueOn !== undefined ? body.dueOn : body.due_on;
+    if (rawDue !== null && rawDue !== "" && parseDueOn(rawDue) === null) {
+      return c.json({ error: "Due date must include a valid date and time." }, 400);
+    }
+  }
+  const dueOn =
+    body.dueOn === undefined && body.due_on === undefined
+      ? null
+      : parseDueOn(body.dueOn ?? body.due_on ?? "") ?? "";
 
   await queries.updateNode.run(
     title,
@@ -1599,6 +1681,8 @@ api.patch("/projects/:id/nodes/:nodeId", async (c) => {
     width,
     height,
     borderColor,
+    status,
+    dueOn,
     now(),
     nodeId,
     project.id,

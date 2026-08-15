@@ -2,11 +2,13 @@ import { lazy, Suspense } from "react";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import MDEditor from "@uiw/react-md-editor";
 import "@uiw/react-markdown-preview/markdown.css";
+import { SpacePlanBadges } from "@/components/SpacePlanBadges";
+import { SpacePlanFields } from "@/components/SpacePlanFields";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingScreen } from "@/components/LoadingScreen";
-import type { SpaceNode } from "@/types";
+import type { SpaceNode, SpaceStatus } from "@/types";
 import MarkdownEditor from "./MarkdownEditor";
 
 const ExcalidrawEditor = lazy(() => import("./ExcalidrawEditor"));
@@ -16,6 +18,8 @@ type Props = {
   saving: boolean;
   readOnly?: boolean;
   onTitle: (title: string) => void;
+  onStatus: (status: SpaceStatus | "") => void;
+  onDueOn: (dueOn: string) => void;
   onMarkdown: (content: string) => void;
   onDrawing: (content: string, preview: string | null) => void;
   onClose: () => void;
@@ -27,14 +31,17 @@ export default function EditorOverlay({
   saving,
   readOnly = false,
   onTitle,
+  onStatus,
+  onDueOn,
   onMarkdown,
   onDrawing,
   onClose,
   onDelete,
 }: Props) {
   return (
-    <div className="bg-background fixed inset-0 z-[80] grid grid-rows-[56px_1fr]">
-      <header className="bg-background relative z-20 flex items-center gap-3 border-b px-4">
+    <div className="bg-background fixed inset-0 z-[80] grid grid-rows-[auto_1fr]">
+      <header className="bg-background relative z-20 space-y-2 border-b px-4 py-2">
+      <div className="flex items-center gap-3">
         <Button variant="outline" size="sm" onClick={onClose}>
           <ArrowLeft />
           Board
@@ -63,6 +70,17 @@ export default function EditorOverlay({
               Delete
             </Button>
           </>
+        )}
+      </div>
+        {readOnly ? (
+          <SpacePlanBadges status={node.status} dueOn={node.dueOn} />
+        ) : (
+          <SpacePlanFields
+            status={node.status}
+            dueOn={node.dueOn}
+            onStatus={onStatus}
+            onDueOn={onDueOn}
+          />
         )}
       </header>
       <div className="editor-stage min-h-0">

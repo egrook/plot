@@ -1,5 +1,6 @@
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import { Maximize2, PenLine } from "lucide-react";
+import { SpacePlanBadges } from "@/components/SpacePlanBadges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,7 @@ export default function DrawingNode({ data, selected }: NodeProps<DrawingFlowNod
           <h3 className="font-serif mt-1 truncate text-base leading-tight">
             {data.title || "Untitled drawing"}
           </h3>
+          <SpacePlanBadges status={data.status} dueOn={data.dueOn} className="mt-1" />
         </div>
         <Button
           size="icon-sm"

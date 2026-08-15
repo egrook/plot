@@ -49,6 +49,8 @@ export async function seedStarterProject(userId: string) {
     380,
     460,
     "",
+    "todo",
+    "",
     t,
     t,
   );
@@ -68,6 +70,8 @@ export async function seedStarterProject(userId: string) {
     80,
     420,
     320,
+    "",
+    "todo",
     "",
     t,
     t,
