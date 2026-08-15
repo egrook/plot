@@ -53,43 +53,50 @@ export default function MarkdownEditor({ value, onChange, onWikiLink }: Props) {
     return () => window.clearTimeout(id);
   }, []);
 
-  async function insertImages(files: File[], start: number, end: number) {
-    if (files.length === 0) return;
-    const token = `uploading-${crypto.randomUUID()}`;
-    const placeholder = `![Uploading…](${token})`;
-    onChange(insertAt(valueRef.current, start, end, placeholder));
-    try {
-      const markdown = await uploadFilesToMarkdown(files);
-      onChange(
-        valueRef.current.replace(
-          placeholder,
-          markdown || "<!-- upload failed -->",
-        ),
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Upload failed";
-      onChange(valueRef.current.replace(placeholder, `<!-- ${message} -->`));
-      toastFromError(err, "Could not upload that image.");
-    }
+  function replacePlaceholder(placeholder: string, markdown: string) {
+    const next = valueRef.current.replace(placeholder, markdown);
+    valueRef.current = next;
+    onChange(next);
   }
 
-  async function insertFiles(files: File[], start: number, end: number) {
-    if (files.length === 0) return;
-    const token = `uploading-${crypto.randomUUID()}`;
-    const placeholder = `[Uploading…](${token})`;
-    onChange(insertAt(valueRef.current, start, end, placeholder));
-    try {
-      const markdown = await uploadFilesToNoteMarkdown(files);
-      onChange(
-        valueRef.current.replace(
-          placeholder,
-          markdown || "<!-- upload failed -->",
-        ),
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Upload failed";
-      onChange(valueRef.current.replace(placeholder, `<!-- ${message} -->`));
-      toastFromError(err, "Could not upload that file.");
+  async function insertUploads(images: File[], docs: File[], start: number, end: number) {
+    const jobs: { placeholder: string; run: () => Promise<string>; fail: string }[] = [];
+    if (images.length > 0) {
+      const placeholder = `![Uploading…](uploading-${crypto.randomUUID()})`;
+      jobs.push({
+        placeholder,
+        fail: "Could not upload that image.",
+        run: () => uploadFilesToMarkdown(images),
+      });
+    }
+    if (docs.length > 0) {
+      const placeholder = `[Uploading…](uploading-${crypto.randomUUID()})`;
+      jobs.push({
+        placeholder,
+        fail: "Could not upload that file.",
+        run: () => uploadFilesToNoteMarkdown(docs),
+      });
+    }
+    if (jobs.length === 0) return;
+
+    const inserted = insertAt(
+      valueRef.current,
+      start,
+      end,
+      jobs.map((job) => job.placeholder).join("\n\n"),
+    );
+    valueRef.current = inserted;
+    onChange(inserted);
+
+    for (const job of jobs) {
+      try {
+        const markdown = await job.run();
+        replacePlaceholder(job.placeholder, markdown || "<!-- upload failed -->");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Upload failed";
+        replacePlaceholder(job.placeholder, `<!-- ${message} -->`);
+        toastFromError(err, job.fail);
+      }
     }
   }
 
@@ -183,8 +190,7 @@ export default function MarkdownEditor({ value, onChange, onWikiLink }: Props) {
             : valueRef.current.length;
         const end =
           typeof target.selectionEnd === "number" ? target.selectionEnd : start;
-        if (images.length > 0) void insertImages(images, start, end);
-        if (docs.length > 0) void insertFiles(docs, start, end);
+        void insertUploads(images, docs, start, end);
       }}
       onDragOver={(event) => {
         if (event.dataTransfer.types.includes("Files")) event.preventDefault();
@@ -196,8 +202,7 @@ export default function MarkdownEditor({ value, onChange, onWikiLink }: Props) {
         const cursor = valueRef.current.length;
         const images = dropped.filter((file) => file.type.startsWith("image/"));
         const docs = dropped.filter((file) => !file.type.startsWith("image/"));
-        if (images.length > 0) void insertImages(images, cursor, cursor);
-        if (docs.length > 0) void insertFiles(docs, cursor, cursor);
+        void insertUploads(images, docs, cursor, cursor);
       }}
     >
       <MDEditor
