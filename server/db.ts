@@ -1,5 +1,6 @@
 import { config } from "./config";
 import { initSql, prepare, sql } from "./sql";
+import { safeAvatarUrl } from "./uploads";
 
 export type UserRow = {
   id: string;
@@ -971,7 +972,7 @@ export function publicUser(row: {
     id: row.id,
     username: row.username,
     createdAt: Number(row.created_at),
-    avatarUrl: row.avatar_url ?? "",
+    avatarUrl: safeAvatarUrl(row.avatar_url),
   };
 }
 

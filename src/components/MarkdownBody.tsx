@@ -1,8 +1,10 @@
 import type { ComponentPropsWithoutRef } from "react";
 import MDEditor from "@uiw/react-md-editor";
 import "@uiw/react-markdown-preview/markdown.css";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
+import type { PluggableList } from "unified";
 import { openFileUrl } from "@/lib/files";
-import { parseWikiHref, remarkWikiLinks } from "@/lib/wiki";
+import { parseWikiHref, remarkWikiLinks, WIKI_PREFIX } from "@/lib/wiki";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -11,9 +13,22 @@ type Props = {
   onWikiLink?: (title: string) => void;
 };
 
+const WIKI_PROTOCOL = WIKI_PREFIX.replace(/:$/, "");
+
+const sanitizeSchema = {
+  ...defaultSchema,
+  protocols: {
+    ...defaultSchema.protocols,
+    href: [...(defaultSchema.protocols?.href ?? []), WIKI_PROTOCOL],
+  },
+};
+
+const rehypePlugins: PluggableList = [[rehypeSanitize, sanitizeSchema]];
+
 export function markdownPreviewOptions(onWikiLink?: (title: string) => void) {
   return {
     remarkPlugins: [remarkWikiLinks],
+    rehypePlugins,
     components: {
       a: ({ href, children, ...props }: ComponentPropsWithoutRef<"a">) => {
         const wiki = parseWikiHref(href);
@@ -66,6 +81,7 @@ export function MarkdownBody({ source, className, onWikiLink }: Props) {
       <MDEditor.Markdown
         source={source}
         remarkPlugins={options.remarkPlugins}
+        rehypePlugins={options.rehypePlugins}
         components={options.components}
       />
     </div>

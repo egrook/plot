@@ -31,6 +31,7 @@ import { initStorage, openUpload, putUpload } from "./storage";
 import {
   extForMime,
   extFromFilename,
+  isAvatarUrl,
   isBlockedExt,
   isSafeUploadId,
   MAX_FILE_BYTES,
@@ -416,18 +417,6 @@ api.post("/auth/logout", async (c) => {
   return c.json({ ok: true });
 });
 
-function avatarUrlOk(value: string) {
-  if (!value) return true;
-  if (value.length > 2000) return false;
-  if (value.startsWith("/api/files/")) return true;
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
 api.patch("/auth/password", requireAuth, async (c) => {
   const user = c.get("user");
   const body = await c.req.json().catch(() => ({}));
@@ -454,8 +443,8 @@ api.patch("/auth/profile", requireAuth, async (c) => {
   const user = c.get("user");
   const body = await c.req.json().catch(() => ({}));
   const avatarUrl = asString(body.avatarUrl).trim();
-  if (!avatarUrlOk(avatarUrl)) {
-    return c.json({ error: "Enter an http(s) image URL, or leave it blank." }, 400);
+  if (!isAvatarUrl(avatarUrl)) {
+    return c.json({ error: "Upload an image, or leave it blank." }, 400);
   }
   await queries.updateAvatar.run(avatarUrl, user.id);
   const row = await queries.findUserById.get<{

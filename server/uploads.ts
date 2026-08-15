@@ -104,6 +104,24 @@ export function isSafeUploadId(id: string) {
   return /^[A-Za-z0-9_-]{16,64}\.[a-z0-9]{1,8}$/.test(id);
 }
 
+const AVATAR_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp"]);
+
+/** Local uploaded file path only — no third-party http(s) URLs. */
+export function isLocalFileUrl(value: string) {
+  if (!value.startsWith("/api/files/")) return false;
+  return isSafeUploadId(value.slice("/api/files/".length));
+}
+
+export function isAvatarUrl(value: string) {
+  if (!value) return true;
+  return isLocalFileUrl(value) && AVATAR_EXTS.has(extFromFilename(value));
+}
+
+export function safeAvatarUrl(value: string | null | undefined) {
+  const url = value ?? "";
+  return isAvatarUrl(url) ? url : "";
+}
+
 export function extFromFilename(name: string) {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
   if (!/^[a-z0-9]{1,8}$/.test(ext)) return "bin";
