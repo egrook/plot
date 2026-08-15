@@ -1,3 +1,18 @@
+import { api } from "@/api";
+
+export async function uploadFilesToNoteMarkdown(files: File[]) {
+  const blocks: string[] = [];
+  for (const file of files) {
+    if (file.type.startsWith("image/")) continue;
+    const uploaded = await api.uploadFile(file);
+    const label =
+      file.name.replace(/[^\w.\- ()[\]]+/g, "").slice(0, 120) ||
+      `${uploaded.name}.${uploaded.ext}`;
+    blocks.push(`[${label}](${uploaded.url})`);
+  }
+  return blocks.join("\n\n");
+}
+
 export function fileExtFromSpace(
   title: string,
   content: string,

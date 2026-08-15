@@ -127,6 +127,7 @@ export type SpaceNodeData = {
   readOnly?: boolean;
   onOpen: () => void;
   onResize: (width: number, height: number) => void;
+  onWikiLink?: (title: string) => void;
 };
 
 export const PROJECT_COLORS = [

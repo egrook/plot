@@ -542,6 +542,12 @@
   text-underline-offset: 3px;
 }
 
+.md-wrap .wmde-markdown a.wiki-link,
+.md-preview .wmde-markdown a.wiki-link {
+  color: oklch(0.8 0.06 230) !important;
+  text-decoration-style: dotted;
+}
+
 .md-wrap .wmde-markdown img,
 .md-preview .wmde-markdown img {
   max-width: 100%;

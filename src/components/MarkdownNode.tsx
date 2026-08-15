@@ -1,7 +1,6 @@
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import { Maximize2 } from "lucide-react";
-import MDEditor from "@uiw/react-md-editor";
-import "@uiw/react-markdown-preview/markdown.css";
+import { MarkdownBody } from "@/components/MarkdownBody";
 import { SpacePlanBadges } from "@/components/SpacePlanBadges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,9 +54,9 @@ export default function MarkdownNode({ data, selected }: NodeProps<MarkdownFlowN
         </Button>
       </header>
       <div className="relative min-h-0 flex-1 overflow-hidden" onDoubleClick={data.onOpen}>
-        <div className="md-preview h-full px-3.5 py-2" data-color-mode="dark">
+        <div className="h-full px-3.5 py-2">
           {data.content ? (
-            <MDEditor.Markdown source={data.content} />
+            <MarkdownBody source={data.content} onWikiLink={data.onWikiLink} />
           ) : (
             <p className="text-muted-foreground">
               {data.readOnly ? "Empty note." : "Double-click to write."}

@@ -1,13 +1,12 @@
 import { lazy, Suspense } from "react";
 import { ArrowLeft, Trash2 } from "lucide-react";
-import MDEditor from "@uiw/react-md-editor";
-import "@uiw/react-markdown-preview/markdown.css";
 import { SpacePlanBadges } from "@/components/SpacePlanBadges";
 import { SpacePlanFields } from "@/components/SpacePlanFields";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingScreen } from "@/components/LoadingScreen";
+import { MarkdownBody } from "@/components/MarkdownBody";
 import type { SpaceNode, SpaceStatus } from "@/types";
 import MarkdownEditor from "./MarkdownEditor";
 
@@ -24,6 +23,7 @@ type Props = {
   onDrawing: (content: string, preview: string | null) => void;
   onClose: () => void;
   onDelete: () => void;
+  onWikiLink?: (title: string) => void;
 };
 
 export default function EditorOverlay({
@@ -37,6 +37,7 @@ export default function EditorOverlay({
   onDrawing,
   onClose,
   onDelete,
+  onWikiLink,
 }: Props) {
   return (
     <div className="bg-background fixed inset-0 z-[80] grid grid-rows-[auto_1fr]">
@@ -86,15 +87,21 @@ export default function EditorOverlay({
       <div className="editor-stage min-h-0">
         {node.type === "markdown" ? (
           readOnly ? (
-            <div className="md-preview h-full overflow-auto px-6 py-5" data-color-mode="dark">
-              {node.content ? (
-                <MDEditor.Markdown source={node.content} />
-              ) : (
-                <p className="text-muted-foreground">This note is empty.</p>
-              )}
-            </div>
+            node.content ? (
+              <MarkdownBody
+                source={node.content}
+                className="h-full overflow-auto px-6 py-5"
+                onWikiLink={onWikiLink}
+              />
+            ) : (
+              <p className="text-muted-foreground px-6 py-5">This note is empty.</p>
+            )
           ) : (
-            <MarkdownEditor value={node.content} onChange={onMarkdown} />
+            <MarkdownEditor
+              value={node.content}
+              onChange={onMarkdown}
+              onWikiLink={onWikiLink}
+            />
           )
         ) : (
           <Suspense fallback={<LoadingScreen message="Loading Excalidraw…" />}>

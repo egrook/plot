@@ -37,6 +37,8 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { openFileUrl } from "@/lib/files";
 import { spaceMatchesQuery } from "@/lib/search";
+import { toast } from "@/lib/toast";
+import { findSpaceByTitle } from "@/lib/wiki";
 import { cn } from "@/lib/utils";
 import type { Project, SpaceEdge, SpaceNode, SpaceStatus, SpaceType } from "@/types";
 
@@ -113,6 +115,26 @@ export function ReadOnlyBoard({
     [writeNodeParam],
   );
 
+  const openWikiLink = useCallback(
+    (title: string) => {
+      const existing = findSpaceByTitle(spaces, title);
+      if (!existing) {
+        toast.error(`No space named “${title.trim()}”.`);
+        return;
+      }
+      if (existing.type === "file") {
+        openFileUrl(existing.content);
+        return;
+      }
+      if (existing.type === "image") {
+        openImage(existing.id);
+        return;
+      }
+      openSpace(existing.id);
+    },
+    [spaces, openImage, openSpace],
+  );
+
   useEffect(() => {
     setNodes((current) => {
       const selected = new Set(
@@ -137,6 +159,7 @@ export function ReadOnlyBoard({
           status: space.status || "",
           dueOn: space.dueOn || "",
           readOnly: true,
+          onWikiLink: openWikiLink,
           onOpen: () => {
             if (space.type === "file") {
               openFileUrl(space.content);
@@ -152,7 +175,7 @@ export function ReadOnlyBoard({
         },
       }));
     });
-  }, [spaces, openSpace, openImage]);
+  }, [spaces, openSpace, openImage, openWikiLink]);
 
   const focusSpace = useCallback(
     (nodeId: string) => {
@@ -457,6 +480,7 @@ export function ReadOnlyBoard({
           onDrawing={() => undefined}
           onClose={() => openSpace(null)}
           onDelete={() => undefined}
+          onWikiLink={openWikiLink}
         />
       ) : null}
 
