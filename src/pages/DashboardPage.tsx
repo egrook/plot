@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, File as FileIcon, FileText, Folder, FolderPlus, ImageIcon, PenLine, Plus, Search, Share2, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, File as FileIcon, FileText, Folder, FolderPlus, ImageIcon, MoreHorizontal, PenLine, Plus, Search, Share2, Trash2 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "@/api";
 import { useAuth } from "@/auth";
@@ -30,6 +30,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -65,6 +66,7 @@ export default function DashboardPage() {
   const [shareId, setShareId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [searching, setSearching] = useState(false);
   const [mineOnly, setMineOnly] = useState(false);
@@ -185,6 +187,29 @@ export default function DashboardPage() {
       setError(err instanceof Error ? err.message : "Could not create project.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function duplicateProject(projectId: string) {
+    if (duplicatingId) return;
+    setDuplicatingId(projectId);
+    try {
+      const { project } = await api.duplicateProject(projectId);
+      setProjects((current) => [project, ...current]);
+      if (project.folderId) {
+        setFolders((current) =>
+          current.map((folder) =>
+            folder.id === project.folderId
+              ? { ...folder, projectIds: [...folder.projectIds, project.id] }
+              : folder,
+          ),
+        );
+      }
+      toast.success(`Copied as “${project.name}”.`);
+    } catch (err) {
+      toastFromError(err, "Could not duplicate that board.");
+    } finally {
+      setDuplicatingId(null);
     }
   }
 
@@ -521,17 +546,17 @@ export default function DashboardPage() {
                   Updated {formatDate(project.updatedAt)}
                 </span>
               </CardContent>
-              <CardFooter className="justify-end gap-1 pb-4">
+              <CardFooter className="justify-end pb-4">
                 <DropdownMenu modal={false}>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="icon-sm"
                       className="text-muted-foreground"
+                      aria-label="Board actions"
                       onClick={(event) => event.stopPropagation()}
                     >
-                      <Folder />
-                      Move
+                      <MoreHorizontal />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
@@ -539,50 +564,50 @@ export default function DashboardPage() {
                     onClick={(event) => event.stopPropagation()}
                   >
                     <DropdownMenuItem
+                      disabled={duplicatingId === project.id}
+                      onSelect={() => void duplicateProject(project.id)}
+                    >
+                      <Copy />
+                      {duplicatingId === project.id ? "Copying…" : "Duplicate"}
+                    </DropdownMenuItem>
+                    {project.role === "owner" ? (
+                      <DropdownMenuItem onSelect={() => setShareId(project.id)}>
+                        <Share2 />
+                        Share
+                      </DropdownMenuItem>
+                    ) : null}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Move to</DropdownMenuLabel>
+                    <DropdownMenuItem
                       onSelect={() => moveProject(project.id, null)}
                     >
+                      <Folder />
                       No folder
                     </DropdownMenuItem>
-                    {folders.length > 0 ? <DropdownMenuSeparator /> : null}
                     {folders.map((folder) => (
                       <DropdownMenuItem
                         key={folder.id}
                         onSelect={() => moveProject(project.id, folder.id)}
                       >
+                        <Folder />
                         {folder.name}
                         {project.folderId === folder.id ? " ·" : ""}
                       </DropdownMenuItem>
                     ))}
+                    {project.role === "owner" ? (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onSelect={() => setDeleteId(project.id)}
+                        >
+                          <Trash2 />
+                          Delete
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
                   </DropdownMenuContent>
                 </DropdownMenu>
-                {project.role === "owner" ? (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setShareId(project.id);
-                      }}
-                    >
-                      <Share2 />
-                      Share
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setDeleteId(project.id);
-                      }}
-                    >
-                      <Trash2 />
-                      Delete
-                    </Button>
-                  </>
-                ) : null}
               </CardFooter>
             </Card>
           ))}

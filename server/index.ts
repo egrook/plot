@@ -15,7 +15,8 @@ import {
   type ProjectRow,
   type UploadRow,
 } from "./db";
-import { getCookie } from "hono/cookie";
+import { createHmac } from "node:crypto";
+import { getCookie, setCookie } from "hono/cookie";
 import {
   clearSessionCookie,
   createSession,
@@ -69,6 +70,9 @@ function isPublicApi(path: string, method: string) {
   if (method === "GET" && /^\/(?:api\/)?s\/[a-z0-9]{4,16}$/i.test(clean)) {
     return true;
   }
+  if (method === "POST" && /^\/(?:api\/)?s\/[a-z0-9]{4,16}\/unlock$/i.test(clean)) {
+    return true;
+  }
   return false;
 }
 
@@ -110,13 +114,70 @@ type PublicLinkRow = {
   project_id: string;
   access: string;
   created_at: number;
+  password_hash?: string | null;
 };
 
 type PublicBoardRow = ProjectRow & {
   link_slug: string;
   link_access: string;
   link_created_at: number;
+  link_password_hash?: string | null;
 };
+
+const LINK_UNLOCK_MS = 1000 * 60 * 60 * 24 * 30;
+
+function linkCookieName(slug: string) {
+  return `plot_link_${slug}`;
+}
+
+function linkUnlockToken(slug: string, passwordHash: string) {
+  return createHmac("sha256", passwordHash).update(slug).digest("base64url");
+}
+
+function setLinkUnlockCookie(c: Parameters<typeof setCookie>[0], slug: string, passwordHash: string) {
+  setCookie(c, linkCookieName(slug), linkUnlockToken(slug, passwordHash), {
+    httpOnly: true,
+    sameSite: "Lax",
+    path: "/",
+    maxAge: LINK_UNLOCK_MS / 1000,
+    secure: config.cookieSecure,
+  });
+}
+
+async function parseLinkPassword(value: unknown) {
+  if (value === undefined) return { kind: "omit" } as const;
+  if (value === null) return { kind: "clear" } as const;
+  const password = asString(value);
+  if (!password) return { kind: "clear" } as const;
+  if (password.length < 4) {
+    return { kind: "invalid", error: "Link password must be at least 4 characters." } as const;
+  }
+  if (password.length > 128) {
+    return { kind: "invalid", error: "Link password is too long." } as const;
+  }
+  const hash = await Bun.password.hash(password, {
+    algorithm: "bcrypt",
+    cost: 10,
+  });
+  return { kind: "set", hash } as const;
+}
+
+async function publicLinkUnlocked(
+  c: Parameters<typeof getCookie>[0],
+  slug: string,
+  passwordHash: string | null | undefined,
+  userId: string | null,
+  project: ProjectRow,
+) {
+  if (!passwordHash) return true;
+  if (userId && project.user_id === userId) return true;
+  if (userId) {
+    const share = await queries.findShare.get(project.id, userId);
+    if (share) return true;
+  }
+  const token = getCookie(c, linkCookieName(slug));
+  return Boolean(token && token === linkUnlockToken(slug, passwordHash));
+}
 
 const MAX_PUBLIC_LINKS = 20;
 
@@ -129,11 +190,17 @@ async function allocatePublicSlug() {
   return null;
 }
 
-function publicLinkJson(row: { slug: string; access: string; created_at: number }) {
+function publicLinkJson(row: {
+  slug: string;
+  access: string;
+  created_at: number;
+  password_hash?: string | null;
+}) {
   return {
     slug: row.slug,
     access: parsePermission(row.access),
     createdAt: Number(row.created_at),
+    hasPassword: Boolean(row.password_hash),
   };
 }
 
@@ -681,6 +748,102 @@ api.post("/projects", async (c) => {
   }, 201);
 });
 
+api.post("/projects/:id/duplicate", async (c) => {
+  const user = c.get("user");
+  const access = await projectAccessible(c.req.param("id"), user.id);
+  if (!access) return c.json({ error: "Project not found." }, 404);
+  const source = access.project;
+
+  const existing = await queries.listProjects.all<ProjectRow>(
+    user.id,
+    user.id,
+    user.id,
+    user.id,
+    user.id,
+  );
+  const name = nextNumberedTitle(
+    existing.map((row) => row.name),
+    `${source.name} copy`,
+  );
+
+  const id = crypto.randomUUID();
+  const t = now();
+  await queries.createProject.run(
+    id,
+    user.id,
+    name,
+    source.description,
+    source.color,
+    source.viewport,
+    t,
+    t,
+  );
+
+  const nodes = await queries.listNodes.all<NodeRow>(source.id);
+  const idMap = new Map<string, string>();
+  for (const node of nodes) {
+    const nodeId = crypto.randomUUID();
+    idMap.set(node.id, nodeId);
+    await queries.createNode.run(
+      nodeId,
+      id,
+      node.type,
+      node.title,
+      node.content,
+      node.preview,
+      node.x,
+      node.y,
+      node.width,
+      node.height,
+      node.border_color,
+      t,
+      t,
+    );
+  }
+
+  const edges = await queries.listEdges.all<EdgeRow>(source.id);
+  for (const edge of edges) {
+    const sourceId = idMap.get(edge.source_id);
+    const targetId = idMap.get(edge.target_id);
+    if (!sourceId || !targetId) continue;
+    await queries.createEdge.run(
+      crypto.randomUUID(),
+      id,
+      sourceId,
+      targetId,
+      edge.source_handle,
+      edge.target_handle,
+      edge.label,
+      t,
+    );
+  }
+
+  const placements = await queries.listFolderItemsForUser.all<{
+    folder_id: string;
+    project_id: string;
+  }>(user.id);
+  const folderId =
+    placements.find((item) => item.project_id === source.id)?.folder_id ?? null;
+  if (folderId) {
+    const folder = await queries.findFolder.get(folderId, user.id);
+    if (folder) await queries.setProjectFolder.run(folderId, id, user.id);
+  }
+
+  const row = (await queries.findProject.get<ProjectRow>(id, user.id))!;
+  return c.json(
+    {
+      project: publicProject({
+        ...row,
+        role: "owner",
+        permission: "edit",
+        folder_id: folderId,
+        node_count: nodes.length,
+      }),
+    },
+    201,
+  );
+});
+
 api.get("/projects/:id", async (c) => {
   const user = c.get("user");
   const access = await projectAccessible(c.req.param("id"), user.id);
@@ -693,10 +856,288 @@ api.get("/projects/:id", async (c) => {
       ...project,
       role,
       permission,
+      can_manage_history: await canManageSnapshots(project.id, user.id, role),
       node_count: nodes.length,
     }),
     nodes: nodes.map(publicNode),
     edges: edges.map(publicEdge),
+  });
+});
+
+const MAX_SNAPSHOTS = 30;
+
+type SnapshotRow = {
+  id: string;
+  project_id: string;
+  user_id: string | null;
+  name: string;
+  payload: string;
+  node_count: number;
+  created_at: number;
+  created_by?: string | null;
+};
+
+function publicSnapshot(
+  row: Omit<SnapshotRow, "payload"> & { payload?: string; created_by?: string | null },
+) {
+  return {
+    id: row.id,
+    name: row.name,
+    nodeCount: Number(row.node_count ?? 0),
+    createdAt: Number(row.created_at),
+    createdBy: row.created_by ?? "",
+  };
+}
+
+async function canManageSnapshots(
+  projectId: string,
+  userId: string,
+  role: "owner" | "shared",
+) {
+  if (role === "owner") return true;
+  const share = await queries.findShare.get<{ permission?: string }>(
+    projectId,
+    userId,
+  );
+  return Boolean(share && parsePermission(share.permission) === "edit");
+}
+
+function defaultSnapshotName(at: number) {
+  return new Date(at).toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+async function captureBoardSnapshot(
+  project: ProjectRow,
+  userId: string,
+  name: string,
+) {
+  const nodes = await queries.listNodes.all<NodeRow>(project.id);
+  const edges = await queries.listEdges.all<EdgeRow>(project.id);
+  const id = crypto.randomUUID();
+  const t = now();
+  await queries.createSnapshot.run(
+    id,
+    project.id,
+    userId,
+    name.slice(0, 120) || defaultSnapshotName(t),
+    JSON.stringify({
+      viewport: project.viewport,
+      nodes,
+      edges,
+    }),
+    nodes.length,
+    t,
+  );
+  return {
+    id,
+    project_id: project.id,
+    user_id: userId,
+    name: name.slice(0, 120) || defaultSnapshotName(t),
+    node_count: nodes.length,
+    created_at: t,
+  };
+}
+
+async function pruneSnapshots(projectId: string, keepId = "") {
+  for (;;) {
+    const countRow = await queries.countSnapshots.get<{ count: number }>(
+      projectId,
+    );
+    if (Number(countRow?.count ?? 0) <= MAX_SNAPSHOTS) return;
+    const oldest = await queries.findOldestSnapshot.get<{ id: string }>(
+      projectId,
+      keepId,
+    );
+    if (!oldest) return;
+    await queries.deleteSnapshot.run(oldest.id, projectId);
+  }
+}
+
+api.get("/projects/:id/snapshots", async (c) => {
+  const user = c.get("user");
+  const access = await projectAccessible(c.req.param("id"), user.id);
+  if (!access) return c.json({ error: "Project not found." }, 404);
+  const rows = await queries.listSnapshots.all<Omit<SnapshotRow, "payload">>(
+    access.project.id,
+  );
+  return c.json({ snapshots: rows.map(publicSnapshot) });
+});
+
+api.post("/projects/:id/snapshots", async (c) => {
+  const user = c.get("user");
+  const access = await projectAccessible(c.req.param("id"), user.id);
+  if (!access) return c.json({ error: "Project not found." }, 404);
+  if (!(await canManageSnapshots(access.project.id, user.id, access.role))) {
+    return c.json({ error: "Only people invited to edit can save versions." }, 403);
+  }
+
+  const countRow = await queries.countSnapshots.get<{ count: number }>(
+    access.project.id,
+  );
+  if (Number(countRow?.count ?? 0) >= MAX_SNAPSHOTS) {
+    return c.json(
+      { error: "This board already has the maximum number of versions." },
+      400,
+    );
+  }
+
+  const body = await c.req.json().catch(() => ({}));
+  const name = asString(body.name).trim() || defaultSnapshotName(now());
+  const row = await captureBoardSnapshot(access.project, user.id, name);
+  return c.json({
+    snapshot: publicSnapshot({ ...row, created_by: user.username }),
+  }, 201);
+});
+
+api.patch("/projects/:id/snapshots/:snapshotId", async (c) => {
+  const user = c.get("user");
+  const access = await projectAccessible(c.req.param("id"), user.id);
+  if (!access) return c.json({ error: "Project not found." }, 404);
+  if (!(await canManageSnapshots(access.project.id, user.id, access.role))) {
+    return c.json({ error: "Only people invited to edit can change versions." }, 403);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const name = asString(body.name).trim();
+  if (!name) return c.json({ error: "Give the snapshot a name." }, 400);
+  if (name.length > 120) return c.json({ error: "Name is too long." }, 400);
+  const result = await queries.updateSnapshotName.run(
+    name,
+    c.req.param("snapshotId"),
+    access.project.id,
+  );
+  if (result.changes === 0) return c.json({ error: "Snapshot not found." }, 404);
+  const row = await queries.findSnapshot.get<SnapshotRow>(
+    c.req.param("snapshotId"),
+    access.project.id,
+  );
+  return c.json({
+    snapshot: publicSnapshot({ ...row!, created_by: user.username }),
+  });
+});
+
+api.delete("/projects/:id/snapshots/:snapshotId", async (c) => {
+  const user = c.get("user");
+  const access = await projectAccessible(c.req.param("id"), user.id);
+  if (!access) return c.json({ error: "Project not found." }, 404);
+  if (!(await canManageSnapshots(access.project.id, user.id, access.role))) {
+    return c.json({ error: "Only people invited to edit can change versions." }, 403);
+  }
+  const result = await queries.deleteSnapshot.run(
+    c.req.param("snapshotId"),
+    access.project.id,
+  );
+  if (result.changes === 0) return c.json({ error: "Snapshot not found." }, 404);
+  return c.json({ ok: true });
+});
+
+api.post("/projects/:id/snapshots/:snapshotId/restore", async (c) => {
+  const user = c.get("user");
+  const access = await projectAccessible(c.req.param("id"), user.id);
+  if (!access) return c.json({ error: "Project not found." }, 404);
+  if (!(await canManageSnapshots(access.project.id, user.id, access.role))) {
+    return c.json({ error: "Only people invited to edit can restore versions." }, 403);
+  }
+  const project = access.project;
+  const snapshot = await queries.findSnapshot.get<SnapshotRow>(
+    c.req.param("snapshotId"),
+    project.id,
+  );
+  if (!snapshot) return c.json({ error: "Snapshot not found." }, 404);
+
+  let data: { viewport?: string; nodes?: NodeRow[]; edges?: EdgeRow[] };
+  try {
+    data = JSON.parse(snapshot.payload);
+  } catch {
+    return c.json({ error: "That snapshot is unreadable." }, 500);
+  }
+  const snapNodes = Array.isArray(data.nodes) ? data.nodes : [];
+  const snapEdges = Array.isArray(data.edges) ? data.edges : [];
+
+  const backup = await captureBoardSnapshot(
+    project,
+    user.id,
+    `Before restoring ${snapshot.name}`.slice(0, 120),
+  );
+  const backupPublic = publicSnapshot({ ...backup, created_by: user.username });
+  await pruneSnapshots(project.id, snapshot.id);
+
+  await queries.deleteProjectEdges.run(project.id);
+  await queries.deleteLiveNodes.run(project.id);
+
+  const t = now();
+  const idMap = new Map<string, string>();
+  for (const node of snapNodes) {
+    const type = asString(node.type);
+    if (
+      type !== "markdown" &&
+      type !== "excalidraw" &&
+      type !== "image" &&
+      type !== "file"
+    ) {
+      continue;
+    }
+    const nodeId = crypto.randomUUID();
+    idMap.set(node.id, nodeId);
+    await queries.createNode.run(
+      nodeId,
+      project.id,
+      type,
+      asString(node.title),
+      asString(node.content),
+      node.preview ?? null,
+      Number(node.x) || 0,
+      Number(node.y) || 0,
+      Number(node.width) || 320,
+      Number(node.height) || 240,
+      asString(node.border_color),
+      Number(node.created_at) || t,
+      t,
+    );
+  }
+
+  for (const edge of snapEdges) {
+    const sourceId = idMap.get(edge.source_id);
+    const targetId = idMap.get(edge.target_id);
+    if (!sourceId || !targetId) continue;
+    await queries.createEdge.run(
+      crypto.randomUUID(),
+      project.id,
+      sourceId,
+      targetId,
+      edge.source_handle ?? null,
+      edge.target_handle ?? null,
+      asString(edge.label),
+      Number(edge.created_at) || t,
+    );
+  }
+
+  const viewport =
+    typeof data.viewport === "string" && data.viewport
+      ? data.viewport
+      : project.viewport;
+  await queries.updateProject.run(null, null, null, viewport, t, project.id);
+
+  const row = (await queries.findProjectById.get<ProjectRow>(project.id))!;
+  const nodes = await queries.listNodes.all<NodeRow>(project.id);
+  const edges = await queries.listEdges.all<EdgeRow>(project.id);
+  return c.json({
+    project: publicProject({
+      ...row,
+      role: access.role,
+      permission: access.permission,
+      owner_username: row.owner_username || access.project.owner_username,
+      can_manage_history: true,
+      node_count: nodes.length,
+    }),
+    nodes: nodes.map(publicNode),
+    edges: edges.map(publicEdge),
+    backup: backupPublic,
   });
 });
 
@@ -787,6 +1228,20 @@ api.get("/s/:slug", async (c) => {
   }
 
   const user = await getSessionUser(c);
+  const unlocked = await publicLinkUnlocked(
+    c,
+    slug,
+    row.link_password_hash,
+    user?.id ?? null,
+    row,
+  );
+  if (!unlocked) {
+    return c.json(
+      { error: "This link is locked.", passwordRequired: true },
+      401,
+    );
+  }
+
   if (user && linkAccess === "edit") {
     await queries.upsertPublicLinkGrant.run(
       row.id,
@@ -812,6 +1267,30 @@ api.get("/s/:slug", async (c) => {
   });
 });
 
+api.post("/s/:slug/unlock", async (c) => {
+  const slug = c.req.param("slug").toLowerCase();
+  if (!/^[a-z0-9]{4,16}$/.test(slug)) {
+    return c.json({ error: "Share link not found." }, 404);
+  }
+  const row = await queries.findProjectByPublicSlug.get<PublicBoardRow>(slug);
+  const linkAccess = row ? parseLinkAccess(row.link_access) : null;
+  if (!row || row.deleted_at || !linkAccess) {
+    return c.json({ error: "Share link not found." }, 404);
+  }
+  if (!row.link_password_hash) {
+    return c.json({ ok: true });
+  }
+
+  const body = await c.req.json().catch(() => ({}));
+  const password = asString(body.password);
+  const ok = await Bun.password.verify(password, row.link_password_hash);
+  if (!ok) {
+    return c.json({ error: "Wrong password." }, 401);
+  }
+  setLinkUnlockCookie(c, slug, row.link_password_hash);
+  return c.json({ ok: true });
+});
+
 api.get("/projects/:id/shares", async (c) => {
   const user = c.get("user");
   const project = await projectOwned(c.req.param("id"), user.id);
@@ -834,6 +1313,7 @@ api.get("/projects/:id/shares", async (c) => {
         slug: string;
         access: string;
         created_at: number;
+        password_hash?: string | null;
       }>(project.id)
     ).map(publicLinkJson),
   });
@@ -912,12 +1392,34 @@ api.post("/projects/:id/links", async (c) => {
     return c.json({ error: "This board already has the maximum number of links." }, 400);
   }
 
+  const password = await parseLinkPassword(body.password);
+  if (password.kind === "invalid") {
+    return c.json({ error: password.error }, 400);
+  }
+
   const slug = await allocatePublicSlug();
   if (!slug) return c.json({ error: "Could not create a share link." }, 500);
 
   const createdAt = now();
-  await queries.createPublicLink.run(slug, project.id, access, createdAt);
-  return c.json({ link: { slug, access, createdAt } }, 201);
+  const passwordHash = password.kind === "set" ? password.hash : "";
+  await queries.createPublicLink.run(
+    slug,
+    project.id,
+    access,
+    createdAt,
+    passwordHash,
+  );
+  return c.json(
+    {
+      link: publicLinkJson({
+        slug,
+        access,
+        created_at: createdAt,
+        password_hash: passwordHash,
+      }),
+    },
+    201,
+  );
 });
 
 api.patch("/projects/:id/links/:slug", async (c) => {
@@ -926,8 +1428,17 @@ api.patch("/projects/:id/links/:slug", async (c) => {
   if (!project) return c.json({ error: "Only the owner can manage sharing." }, 403);
   const slug = c.req.param("slug").toLowerCase();
   const body = await c.req.json().catch(() => ({}));
-  const access = parseLinkAccess(asString(body.access));
-  if (!access) return c.json({ error: "Permission must be view or edit." }, 400);
+  const access =
+    body.access === undefined
+      ? null
+      : parseLinkAccess(asString(body.access));
+  if (body.access !== undefined && !access) {
+    return c.json({ error: "Permission must be view or edit." }, 400);
+  }
+  const password = await parseLinkPassword(body.password);
+  if (password.kind === "invalid") {
+    return c.json({ error: password.error }, 400);
+  }
 
   const existing = await queries.findPublicLinkForProject.get<PublicLinkRow>(
     project.id,
@@ -935,11 +1446,28 @@ api.patch("/projects/:id/links/:slug", async (c) => {
   );
   if (!existing) return c.json({ error: "Share link not found." }, 404);
 
-  await queries.updatePublicLink.run(access, project.id, slug);
-  if (access === "view") {
-    await queries.deletePublicLinkGrants.run(project.id, slug);
+  const nextAccess = access ?? parsePermission(existing.access);
+  if (access) {
+    await queries.updatePublicLink.run(access, project.id, slug);
+    if (access === "view") {
+      await queries.deletePublicLinkGrants.run(project.id, slug);
+    }
   }
-  return c.json({ link: publicLinkJson({ ...existing, access }) });
+  let passwordHash = existing.password_hash ?? "";
+  if (password.kind === "set") {
+    passwordHash = password.hash;
+    await queries.updatePublicLinkPassword.run(passwordHash, project.id, slug);
+  } else if (password.kind === "clear") {
+    passwordHash = "";
+    await queries.updatePublicLinkPassword.run("", project.id, slug);
+  }
+  return c.json({
+    link: publicLinkJson({
+      ...existing,
+      access: nextAccess,
+      password_hash: passwordHash,
+    }),
+  });
 });
 
 api.delete("/projects/:id/links/:slug", async (c) => {

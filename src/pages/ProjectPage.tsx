@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
+  Copy,
   File as FileIcon,
   FileText,
+  History,
   ImageIcon,
   Pencil,
   PenLine,
@@ -36,6 +38,7 @@ import { useAuth } from "@/auth";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import DrawingNode from "@/components/DrawingNode";
 import { ShareProjectDialog } from "@/components/ShareProjectDialog";
+import { SnapshotDialog } from "@/components/SnapshotDialog";
 import EditorOverlay from "@/components/EditorOverlay";
 import FileNode from "@/components/FileNode";
 import ImageNode from "@/components/ImageNode";
@@ -43,6 +46,11 @@ import { LoadingScreen } from "@/components/LoadingScreen";
 import MarkdownNode from "@/components/MarkdownNode";
 import { BoardSearch } from "@/components/BoardSearch";
 import { ReadOnlyBoard } from "@/components/ReadOnlyBoard";
+import {
+  SpaceTypeFilter,
+  spaceKindLabel,
+  type SpaceKindFilter,
+} from "@/components/SpaceTypeFilter";
 import { UserMenu } from "@/components/UserMenu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,6 +74,7 @@ import { cn } from "@/lib/utils";
 import {
   NODE_BORDER_COLORS,
   type Project,
+  type ProjectGraph,
   type SpaceEdge,
   type SpaceNode,
   type SpaceType,
@@ -110,7 +119,7 @@ function WorkspaceInner() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { screenToFlowPosition, setCenter, getNode } = useReactFlow();
+  const { screenToFlowPosition, setCenter, getNode, setViewport } = useReactFlow();
   const [project, setProject] = useState<Project | null>(null);
   const [spaces, setSpaces] = useState<SpaceNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<SpaceEdge[]>([]);
@@ -120,6 +129,7 @@ function WorkspaceInner() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [kindFilter, setKindFilter] = useState<SpaceKindFilter>("all");
   const saveTimer = useRef<number | null>(null);
   const viewportTimer = useRef<number | null>(null);
   const lastSavedViewport = useRef<Viewport | null>(null);
@@ -137,6 +147,8 @@ function WorkspaceInner() {
   const [imageBusy, setImageBusy] = useState(false);
   const [imageError, setImageError] = useState("");
   const [shareOpen, setShareOpen] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
   const [spaceTrashOpen, setSpaceTrashOpen] = useState(false);
   const [trashedSpaces, setTrashedSpaces] = useState<SpaceNode[]>([]);
   const [loadingSpaceTrash, setLoadingSpaceTrash] = useState(false);
@@ -185,6 +197,42 @@ function WorkspaceInner() {
       }
     },
     [id],
+  );
+
+  const applyGraph = useCallback(
+    (data: ProjectGraph) => {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+      pendingPatch.current = {};
+      setProject((current) => ({
+        ...data.project,
+        role: current?.role === "shared" ? "shared" : data.project.role,
+        permission:
+          current?.permission === "view" ? "view" : data.project.permission,
+        ownerUsername: data.project.ownerUsername || current?.ownerUsername || "",
+        folderId: current?.folderId ?? data.project.folderId,
+        canManageHistory:
+          current?.canManageHistory ?? data.project.canManageHistory,
+      }));
+      lastSavedViewport.current = data.project.viewport;
+      setSpaces(data.nodes);
+      setGraphEdges(data.edges);
+      setEdges(
+        data.edges.map((edge) => ({
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          sourceHandle: edge.sourceHandle ?? undefined,
+          targetHandle: edge.targetHandle ?? undefined,
+          label: edge.label || undefined,
+          type: "smoothstep" as const,
+          animated: true,
+        })),
+      );
+      setOpenId(null);
+      writeNodeParam(null);
+      setViewport(data.project.viewport);
+    },
+    [setViewport, writeNodeParam],
   );
 
   const flushSaves = useCallback(() => {
@@ -465,8 +513,13 @@ function WorkspaceInner() {
   const openNode = spaces.find((space) => space.id === openId) ?? null;
 
   const filteredSpaces = useMemo(
-    () => spaces.filter((space) => spaceMatchesQuery(space, query)),
-    [spaces, query],
+    () =>
+      spaces.filter(
+        (space) =>
+          (kindFilter === "all" || space.type === kindFilter) &&
+          spaceMatchesQuery(space, query),
+      ),
+    [spaces, query, kindFilter],
   );
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
@@ -622,12 +675,27 @@ function WorkspaceInner() {
     );
   }
 
+  async function duplicateBoard() {
+    if (!id || duplicating) return;
+    setDuplicating(true);
+    try {
+      const { project: copy } = await api.duplicateProject(id);
+      toast.success(`Copied as “${copy.name}”.`);
+      navigate(`/project/${copy.id}`);
+    } catch (err) {
+      toastFromError(err, "Could not duplicate that board.");
+    } finally {
+      setDuplicating(false);
+    }
+  }
+
   if (!project || !id) {
     return <LoadingScreen message="Laying out the board…" />;
   }
 
   if (project.permission === "view") {
     return (
+      <>
       <ReadOnlyBoard
         project={project}
         spaces={spaces}
@@ -645,6 +713,23 @@ function WorkspaceInner() {
             {project.role === "shared" ? (
               <Badge variant="outline">Shared by {project.ownerUsername}</Badge>
             ) : null}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={duplicating}
+              onClick={() => void duplicateBoard()}
+            >
+              <Copy />
+              {duplicating ? "Copying…" : "Duplicate"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setVersionsOpen(true)}
+            >
+              <History />
+              Versions
+            </Button>
             <UserMenu
               username={user?.username ?? ""}
               onLogout={() => logout().then(() => navigate("/login"))}
@@ -652,6 +737,14 @@ function WorkspaceInner() {
           </>
         }
       />
+      <SnapshotDialog
+        projectId={id}
+        open={versionsOpen}
+        canEdit={false}
+        onOpenChange={setVersionsOpen}
+        onRestore={applyGraph}
+      />
+      </>
     );
   }
 
@@ -685,6 +778,15 @@ function WorkspaceInner() {
               Share
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={duplicating}
+            onClick={() => void duplicateBoard()}
+          >
+            <Copy />
+            {duplicating ? "Copying…" : "Duplicate"}
+          </Button>
           <Badge variant={saving ? "secondary" : "outline"}>
             {saving ? "Saving…" : "Saved"}
           </Badge>
@@ -710,12 +812,17 @@ function WorkspaceInner() {
                 onChange={(e) => setQuery(e.target.value)}
               />
             </div>
+            <SpaceTypeFilter value={kindFilter} onChange={setKindFilter} />
           </div>
           <div className="min-h-0 flex-1 overflow-hidden">
           <ScrollArea className="h-full px-2 pb-3">
             {filteredSpaces.length === 0 ? (
               <p className="text-muted-foreground px-2 py-8 text-center text-sm">
-                Nothing on this board yet.
+                {spaces.length === 0
+                  ? "Nothing on this board yet."
+                  : kindFilter === "all"
+                    ? "No spaces match that search."
+                    : `No ${spaceKindLabel(kindFilter).toLowerCase()} here.`}
               </p>
             ) : (
               <div className="flex flex-col gap-1">
@@ -824,7 +931,16 @@ function WorkspaceInner() {
             )}
           </ScrollArea>
           </div>
-          <div className="shrink-0 border-t p-2">
+          <div className="shrink-0 space-y-1 border-t p-2">
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-muted-foreground w-full justify-start"
+              onClick={() => setVersionsOpen(true)}
+            >
+              <History />
+              Versions
+            </Button>
             <Button
               type="button"
               variant="ghost"
@@ -1345,6 +1461,15 @@ function WorkspaceInner() {
         projectId={id}
         open={shareOpen}
         onOpenChange={setShareOpen}
+      />
+
+      <SnapshotDialog
+        projectId={id ?? null}
+        open={versionsOpen}
+        canEdit={project.canManageHistory === true}
+        onOpenChange={setVersionsOpen}
+        onBeforeMutate={flushSaves}
+        onRestore={applyGraph}
       />
 
       <Dialog open={spaceTrashOpen} onOpenChange={setSpaceTrashOpen}>

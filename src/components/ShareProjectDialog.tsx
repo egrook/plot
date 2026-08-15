@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Copy, Link2, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, Link2, Lock, Plus, Trash2 } from "lucide-react";
 import { api } from "@/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,8 +39,12 @@ export function ShareProjectDialog({ projectId, open, onOpenChange }: Props) {
   const [shareError, setShareError] = useState("");
   const [shareBusy, setShareBusy] = useState(false);
   const [newLinkAccess, setNewLinkAccess] = useState<PublicAccess>("view");
+  const [newLinkPassword, setNewLinkPassword] = useState("");
   const [linkBusy, setLinkBusy] = useState(false);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
+  const [passwordSlug, setPasswordSlug] = useState<string | null>(null);
+  const [passwordDraft, setPasswordDraft] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
 
   useEffect(() => {
     if (!open || !projectId) return;
@@ -48,6 +52,9 @@ export function ShareProjectDialog({ projectId, open, onOpenChange }: Props) {
     setShareName("");
     setInvitePermission("edit");
     setCopiedSlug(null);
+    setNewLinkPassword("");
+    setPasswordSlug(null);
+    setPasswordDraft("");
     void api
       .listShares(projectId)
       .then((data) => {
@@ -82,10 +89,15 @@ export function ShareProjectDialog({ projectId, open, onOpenChange }: Props) {
     setLinkBusy(true);
     setShareError("");
     api
-      .createPublicLink(projectId, newLinkAccess)
+      .createPublicLink(projectId, newLinkAccess, newLinkPassword.trim())
       .then((data) => {
         setLinks((current) => [data.link, ...current]);
-        toast.success("Share link created.");
+        setNewLinkPassword("");
+        toast.success(
+          data.link.hasPassword
+            ? "Locked share link created."
+            : "Share link created.",
+        );
         void navigator.clipboard
           .writeText(publicUrl(data.link.slug))
           .then(() => setCopiedSlug(data.link.slug))
@@ -106,8 +118,9 @@ export function ShareProjectDialog({ projectId, open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Share board</DialogTitle>
           <DialogDescription>
-            Invite people by username, or create public links. Deleting a link
-            retires that URL for good.
+            Invite people by username, or create public links. An optional
+            password keeps a link safer to send. Deleting a link retires that
+            URL for good.
           </DialogDescription>
         </DialogHeader>
 
@@ -117,10 +130,11 @@ export function ShareProjectDialog({ projectId, open, onOpenChange }: Props) {
           </p>
           {links.length === 0 ? (
             <p className="text-muted-foreground text-sm">
-              No public links yet. Anyone with a link can open the board.
+              No public links yet. Anyone with a link can open the board,
+              unless you add a password.
             </p>
           ) : (
-            <ScrollArea className={cn(links.length > 2 ? "h-56" : "h-auto")}>
+            <ScrollArea className={cn(links.length > 2 ? "h-64" : "h-auto")}>
               <div className="space-y-2 pr-3">
               {links.map((link) => (
                 <div
@@ -154,7 +168,7 @@ export function ShareProjectDialog({ projectId, open, onOpenChange }: Props) {
                         if (!projectId) return;
                         const access = event.target.value as PublicAccess;
                         void api
-                          .updatePublicLink(projectId, link.slug, access)
+                          .updatePublicLink(projectId, link.slug, { access })
                           .then((data) => {
                             setLinks((current) =>
                               current.map((item) =>
@@ -175,38 +189,138 @@ export function ShareProjectDialog({ projectId, open, onOpenChange }: Props) {
                       <option value="view">View</option>
                       <option value="edit">Edit</option>
                     </select>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => {
-                        if (!projectId) return;
+                    <div className="flex flex-wrap items-center justify-end gap-1">
+                      {link.hasPassword ? (
+                        <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
+                          <Lock className="size-3" />
+                          Locked
+                        </span>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground"
+                        onClick={() => {
+                          setPasswordSlug(
+                            passwordSlug === link.slug ? null : link.slug,
+                          );
+                          setPasswordDraft("");
+                        }}
+                      >
+                        {link.hasPassword ? "Change password" : "Add password"}
+                      </Button>
+                      {link.hasPassword ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-muted-foreground"
+                          disabled={passwordBusy}
+                          onClick={() => {
+                            if (!projectId) return;
+                            setPasswordBusy(true);
+                            void api
+                              .updatePublicLink(projectId, link.slug, {
+                                password: null,
+                              })
+                              .then((data) => {
+                                setLinks((current) =>
+                                  current.map((item) =>
+                                    item.slug === link.slug ? data.link : item,
+                                  ),
+                                );
+                                setPasswordSlug(null);
+                                toast.success("Password removed.");
+                              })
+                              .catch((err) => {
+                                toastFromError(
+                                  err,
+                                  "Could not update that link.",
+                                );
+                              })
+                              .finally(() => setPasswordBusy(false));
+                          }}
+                        >
+                          Unlock
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => {
+                          if (!projectId) return;
+                          void api
+                            .deletePublicLink(projectId, link.slug)
+                            .then(() => {
+                              setLinks((current) =>
+                                current.filter((item) => item.slug !== link.slug),
+                              );
+                              toast.success(
+                                "Link deleted. That URL will not work again.",
+                              );
+                            })
+                            .catch((err) => {
+                              toastFromError(err, "Could not delete that link.");
+                            });
+                        }}
+                      >
+                        <Trash2 />
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                  {passwordSlug === link.slug ? (
+                    <form
+                      className="flex gap-2"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        if (!projectId || passwordBusy) return;
+                        const password = passwordDraft.trim();
+                        if (password.length < 4) {
+                          toast.error("Password must be at least 4 characters.");
+                          return;
+                        }
+                        setPasswordBusy(true);
                         void api
-                          .deletePublicLink(projectId, link.slug)
-                          .then(() => {
+                          .updatePublicLink(projectId, link.slug, { password })
+                          .then((data) => {
                             setLinks((current) =>
-                              current.filter((item) => item.slug !== link.slug),
+                              current.map((item) =>
+                                item.slug === link.slug ? data.link : item,
+                              ),
                             );
-                            toast.success(
-                              "Link deleted. That URL will not work again.",
-                            );
+                            setPasswordSlug(null);
+                            setPasswordDraft("");
+                            toast.success("Password saved. Send it separately.");
                           })
                           .catch((err) => {
-                            toastFromError(err, "Could not delete that link.");
-                          });
+                            toastFromError(err, "Could not update that link.");
+                          })
+                          .finally(() => setPasswordBusy(false));
                       }}
                     >
-                      <Trash2 />
-                      Delete
-                    </Button>
-                  </div>
+                      <Input
+                        type="password"
+                        value={passwordDraft}
+                        onChange={(event) => setPasswordDraft(event.target.value)}
+                        placeholder="New password"
+                        autoFocus
+                        className="h-8"
+                      />
+                      <Button type="submit" size="sm" disabled={passwordBusy}>
+                        Save
+                      </Button>
+                    </form>
+                  ) : null}
                 </div>
               ))}
               </div>
             </ScrollArea>
           )}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <select
               value={newLinkAccess}
               onChange={(event) =>
@@ -217,6 +331,13 @@ export function ShareProjectDialog({ projectId, open, onOpenChange }: Props) {
               <option value="view">View</option>
               <option value="edit">Edit</option>
             </select>
+            <Input
+              type="password"
+              value={newLinkPassword}
+              onChange={(event) => setNewLinkPassword(event.target.value)}
+              placeholder="Optional password"
+              className="h-9 min-w-0 flex-1"
+            />
             <Button
               type="button"
               variant="outline"

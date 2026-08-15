@@ -14,6 +14,11 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { BoardSearch } from "@/components/BoardSearch";
+import {
+  SpaceTypeFilter,
+  spaceKindLabel,
+  type SpaceKindFilter,
+} from "@/components/SpaceTypeFilter";
 import DrawingNode from "@/components/DrawingNode";
 import EditorOverlay from "@/components/EditorOverlay";
 import FileNode from "@/components/FileNode";
@@ -69,6 +74,7 @@ export function ReadOnlyBoard({
   const [nodes, setNodes] = useState<Node[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [kindFilter, setKindFilter] = useState<SpaceKindFilter>("all");
   const [imageId, setImageId] = useState<string | null>(null);
 
   const writeNodeParam = useCallback(
@@ -225,8 +231,13 @@ export function ReadOnlyBoard({
   );
 
   const filteredSpaces = useMemo(
-    () => spaces.filter((space) => spaceMatchesQuery(space, query)),
-    [spaces, query],
+    () =>
+      spaces.filter(
+        (space) =>
+          (kindFilter === "all" || space.type === kindFilter) &&
+          spaceMatchesQuery(space, query),
+      ),
+    [spaces, query, kindFilter],
   );
 
   const openNode = spaces.find((space) => space.id === openId) ?? null;
@@ -261,11 +272,16 @@ export function ReadOnlyBoard({
                 onChange={(e) => setQuery(e.target.value)}
               />
             </div>
+            <SpaceTypeFilter value={kindFilter} onChange={setKindFilter} />
           </div>
           <ScrollArea className="min-h-0 flex-1 px-2 pb-3">
             {filteredSpaces.length === 0 ? (
               <p className="text-muted-foreground px-2 py-8 text-center text-sm">
-                Nothing on this board yet.
+                {spaces.length === 0
+                  ? "Nothing on this board yet."
+                  : kindFilter === "all"
+                    ? "No spaces match that search."
+                    : `No ${spaceKindLabel(kindFilter).toLowerCase()} here.`}
               </p>
             ) : (
               <div className="flex flex-col gap-1">

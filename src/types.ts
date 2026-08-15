@@ -28,6 +28,7 @@ export type Project = {
   createdAt: number;
   updatedAt: number;
   deletedAt?: number;
+  canManageHistory?: boolean;
 };
 
 export type ProjectFolder = {
@@ -48,6 +49,7 @@ export type PublicLink = {
   slug: string;
   access: PublicAccess;
   createdAt: number;
+  hasPassword: boolean;
 };
 
 export type SpaceType = "markdown" | "excalidraw" | "image" | "file";
@@ -91,6 +93,14 @@ export type PublicBoard = {
   nodes: SpaceNode[];
   edges: SpaceEdge[];
   canEdit: boolean;
+};
+
+export type ProjectSnapshot = {
+  id: string;
+  name: string;
+  nodeCount: number;
+  createdAt: number;
+  createdBy: string;
 };
 
 export type SearchHit = {

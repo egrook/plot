@@ -32,6 +32,7 @@ export type ProjectRow = {
   role?: "owner" | "shared";
   permission?: "view" | "edit";
   folder_id?: string | null;
+  can_manage_history?: boolean;
 };
 
 export type NodeRow = {
@@ -198,7 +199,7 @@ export const queries = {
     "DELETE FROM project_shares WHERE project_id = ? AND user_id = ?",
   ),
   listPublicLinks: prepare(
-    `SELECT slug, access, created_at
+    `SELECT slug, access, created_at, password_hash
      FROM project_public_links
      WHERE project_id = ?
      ORDER BY created_at DESC`,
@@ -212,6 +213,7 @@ export const queries = {
   ),
   findProjectByPublicSlug: prepare(
     `SELECT l.slug AS link_slug, l.access AS link_access, l.created_at AS link_created_at,
+            l.password_hash AS link_password_hash,
             p.*, u.username AS owner_username
      FROM project_public_links l
      JOIN projects p ON p.id = l.project_id
@@ -219,10 +221,13 @@ export const queries = {
      WHERE l.slug = ?`,
   ),
   createPublicLink: prepare(
-    "INSERT INTO project_public_links (slug, project_id, access, created_at) VALUES (?, ?, ?, ?)",
+    "INSERT INTO project_public_links (slug, project_id, access, created_at, password_hash) VALUES (?, ?, ?, ?, ?)",
   ),
   updatePublicLink: prepare(
     "UPDATE project_public_links SET access = ? WHERE project_id = ? AND slug = ?",
+  ),
+  updatePublicLinkPassword: prepare(
+    "UPDATE project_public_links SET password_hash = ? WHERE project_id = ? AND slug = ?",
   ),
   deletePublicLink: prepare(
     "DELETE FROM project_public_links WHERE project_id = ? AND slug = ?",
@@ -342,6 +347,41 @@ export const queries = {
      VALUES (?, ?, ?, ?, ?, ?)`,
   ),
   findUpload: prepare("SELECT * FROM uploads WHERE id = ?"),
+
+  listSnapshots: prepare(
+    `SELECT s.id, s.project_id, s.user_id, s.name, s.node_count, s.created_at,
+            u.username AS created_by
+     FROM project_snapshots s
+     LEFT JOIN users u ON u.id = s.user_id
+     WHERE s.project_id = ?
+     ORDER BY s.created_at DESC`,
+  ),
+  findSnapshot: prepare(
+    "SELECT * FROM project_snapshots WHERE id = ? AND project_id = ?",
+  ),
+  countSnapshots: prepare(
+    "SELECT COUNT(*) AS count FROM project_snapshots WHERE project_id = ?",
+  ),
+  createSnapshot: prepare(
+    `INSERT INTO project_snapshots (id, project_id, user_id, name, payload, node_count, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ),
+  updateSnapshotName: prepare(
+    "UPDATE project_snapshots SET name = ? WHERE id = ? AND project_id = ?",
+  ),
+  deleteSnapshot: prepare(
+    "DELETE FROM project_snapshots WHERE id = ? AND project_id = ?",
+  ),
+  findOldestSnapshot: prepare(
+    `SELECT id FROM project_snapshots
+     WHERE project_id = ? AND id != ?
+     ORDER BY created_at ASC
+     LIMIT 1`,
+  ),
+  deleteLiveNodes: prepare(
+    "DELETE FROM nodes WHERE project_id = ? AND deleted_at IS NULL",
+  ),
+  deleteProjectEdges: prepare("DELETE FROM edges WHERE project_id = ?"),
 };
 
 function sqliteSchema() {
@@ -433,6 +473,7 @@ function sqliteSchema() {
     project_id TEXT NOT NULL,
     access TEXT NOT NULL,
     created_at INTEGER NOT NULL,
+    password_hash TEXT NOT NULL DEFAULT '',
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
   );
 
@@ -463,6 +504,18 @@ function sqliteSchema() {
     PRIMARY KEY (project_id, user_id, slug),
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS project_snapshots (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    user_id TEXT,
+    name TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    node_count INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
   );
 `;
 }
@@ -546,7 +599,8 @@ function postgresSchema() {
     slug TEXT PRIMARY KEY,
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     access TEXT NOT NULL,
-    created_at BIGINT NOT NULL
+    created_at BIGINT NOT NULL,
+    password_hash TEXT NOT NULL DEFAULT ''
   );
 
   CREATE TABLE IF NOT EXISTS project_folders (
@@ -570,6 +624,16 @@ function postgresSchema() {
     permission TEXT NOT NULL,
     created_at BIGINT NOT NULL,
     PRIMARY KEY (project_id, user_id, slug)
+  );
+
+  CREATE TABLE IF NOT EXISTS project_snapshots (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    name TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    node_count INTEGER NOT NULL DEFAULT 0,
+    created_at BIGINT NOT NULL
   );
 `;
 }
@@ -663,6 +727,7 @@ function mysqlSchema() {
     project_id VARCHAR(36) NOT NULL,
     access VARCHAR(16) NOT NULL,
     created_at BIGINT NOT NULL,
+    password_hash VARCHAR(255) NOT NULL DEFAULT '',
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -694,6 +759,18 @@ function mysqlSchema() {
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+  CREATE TABLE IF NOT EXISTS project_snapshots (
+    id VARCHAR(36) PRIMARY KEY,
+    project_id VARCHAR(36) NOT NULL,
+    user_id VARCHAR(36) NULL,
+    name VARCHAR(120) NOT NULL,
+    payload LONGTEXT NOT NULL,
+    node_count INTEGER NOT NULL DEFAULT 0,
+    created_at BIGINT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `;
 }
 
@@ -708,6 +785,7 @@ const INDEXES = [
   "CREATE INDEX IF NOT EXISTS idx_folders_user ON project_folders(user_id)",
   "CREATE INDEX IF NOT EXISTS idx_folder_items_folder ON project_folder_items(folder_id)",
   "CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_public_slug ON projects(public_slug)",
+  "CREATE INDEX IF NOT EXISTS idx_snapshots_project ON project_snapshots(project_id)",
 ];
 
 async function columnExists(table: string, column: string) {
@@ -756,6 +834,7 @@ async function migrateSqliteLegacy() {
     "ALTER TABLE project_shares ADD COLUMN permission TEXT NOT NULL DEFAULT 'edit'",
     "ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE nodes ADD COLUMN deleted_at INTEGER",
+    "ALTER TABLE project_public_links ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''",
   ];
   for (const statement of statements) {
     try {
@@ -828,6 +907,7 @@ async function applySchema() {
             ["project_shares", "permission", "TEXT NOT NULL DEFAULT 'edit'"],
             ["nodes", "border_color", "TEXT NOT NULL DEFAULT ''"],
             ["nodes", "deleted_at", "BIGINT"],
+            ["project_public_links", "password_hash", "TEXT NOT NULL DEFAULT ''"],
           ]
         : [
             ["users", "avatar_url", "VARCHAR(2000) NOT NULL DEFAULT ''"],
@@ -837,6 +917,7 @@ async function applySchema() {
             ["project_shares", "permission", "VARCHAR(16) NOT NULL DEFAULT 'edit'"],
             ["nodes", "border_color", "VARCHAR(32) NOT NULL DEFAULT ''"],
             ["nodes", "deleted_at", "BIGINT NULL"],
+            ["project_public_links", "password_hash", "VARCHAR(255) NOT NULL DEFAULT ''"],
           ];
     for (const [table, column, definition] of extra) {
       await addColumn(table, column, definition);
@@ -898,6 +979,7 @@ export function publicProject(row: ProjectRow) {
     folderId: row.folder_id ?? null,
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
+    canManageHistory: row.can_manage_history === true,
   };
 }
 

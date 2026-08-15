@@ -13,6 +13,7 @@ type Props = {
   title: string;
   description: string;
   confirmLabel?: string;
+  busyLabel?: string;
   busy?: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
@@ -23,6 +24,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = "Delete",
+  busyLabel = "Deleting…",
   busy = false,
   onOpenChange,
   onConfirm,
@@ -49,7 +51,7 @@ export function ConfirmDialog({
             disabled={busy}
             onClick={onConfirm}
           >
-            {busy ? "Deleting…" : confirmLabel}
+            {busy ? busyLabel : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

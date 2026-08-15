@@ -5,6 +5,7 @@ import type {
   ProjectFolder,
   ProjectGraph,
   ProjectShare,
+  ProjectSnapshot,
   PublicAccess,
   PublicBoard,
   PublicLink,
@@ -18,9 +19,11 @@ import type {
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  passwordRequired: boolean;
+  constructor(message: string, status: number, passwordRequired = false) {
     super(message);
     this.status = status;
+    this.passwordRequired = passwordRequired;
   }
 }
 
@@ -34,6 +37,7 @@ function notifyRequestError(path: string, error: ApiError) {
   ) {
     return;
   }
+  if (error.passwordRequired || clean.startsWith("/api/s/")) return;
   if (error.status === 403) {
     toast.error(error.message || "You don't have permission to do that.");
     return;
@@ -55,7 +59,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const error = new ApiError(data.error || "Request failed", res.status);
+    const error = new ApiError(
+      data.error || "Request failed",
+      res.status,
+      Boolean(data.passwordRequired),
+    );
     notifyRequestError(path, error);
     throw error;
   }
@@ -133,12 +141,45 @@ export const api = {
     }),
   deleteProject: (id: string) =>
     request<{ ok: true }>(`/api/projects/${id}`, { method: "DELETE" }),
+  duplicateProject: (id: string) =>
+    request<{ project: Project }>(`/api/projects/${id}/duplicate`, {
+      method: "POST",
+    }),
+  listSnapshots: (id: string) =>
+    request<{ snapshots: ProjectSnapshot[] }>(`/api/projects/${id}/snapshots`),
+  createSnapshot: (id: string, name?: string) =>
+    request<{ snapshot: ProjectSnapshot }>(`/api/projects/${id}/snapshots`, {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  updateSnapshot: (id: string, snapshotId: string, name: string) =>
+    request<{ snapshot: ProjectSnapshot }>(
+      `/api/projects/${id}/snapshots/${snapshotId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ name }),
+      },
+    ),
+  deleteSnapshot: (id: string, snapshotId: string) =>
+    request<{ ok: true }>(`/api/projects/${id}/snapshots/${snapshotId}`, {
+      method: "DELETE",
+    }),
+  restoreSnapshot: (id: string, snapshotId: string) =>
+    request<ProjectGraph & { backup: ProjectSnapshot }>(
+      `/api/projects/${id}/snapshots/${snapshotId}/restore`,
+      { method: "POST" },
+    ),
   listTrash: () => request<{ projects: Project[] }>("/api/trash"),
   restoreProject: (id: string) =>
     request<{ ok: true }>(`/api/trash/${id}/restore`, { method: "POST" }),
   purgeProject: (id: string) =>
     request<{ ok: true }>(`/api/trash/${id}`, { method: "DELETE" }),
   getPublicBoard: (slug: string) => request<PublicBoard>(`/api/s/${slug}`),
+  unlockPublicBoard: (slug: string, password: string) =>
+    request<{ ok: true }>(`/api/s/${slug}/unlock`, {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }),
   listShares: (id: string) =>
     request<{ shares: ProjectShare[]; links: PublicLink[] }>(
       `/api/projects/${id}/shares`,
@@ -160,15 +201,19 @@ export const api = {
         body: JSON.stringify({ permission }),
       },
     ),
-  createPublicLink: (id: string, access: PublicAccess) =>
+  createPublicLink: (id: string, access: PublicAccess, password?: string) =>
     request<{ link: PublicLink }>(`/api/projects/${id}/links`, {
       method: "POST",
-      body: JSON.stringify({ access }),
+      body: JSON.stringify({ access, password: password || undefined }),
     }),
-  updatePublicLink: (id: string, slug: string, access: PublicAccess) =>
+  updatePublicLink: (
+    id: string,
+    slug: string,
+    input: { access?: PublicAccess; password?: string | null },
+  ) =>
     request<{ link: PublicLink }>(`/api/projects/${id}/links/${slug}`, {
       method: "PATCH",
-      body: JSON.stringify({ access }),
+      body: JSON.stringify(input),
     }),
   deletePublicLink: (id: string, slug: string) =>
     request<{ ok: true }>(`/api/projects/${id}/links/${slug}`, {
