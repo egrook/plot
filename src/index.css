@@ -202,6 +202,20 @@
   background: oklch(1 0 0 / 28%);
 }
 
+.time-input {
+  color-scheme: dark;
+}
+
+.time-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(1);
+  opacity: 0.7;
+}
+
+.time-input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
 .react-flow {
   background: transparent;
 }

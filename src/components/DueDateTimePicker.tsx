@@ -63,7 +63,7 @@ export function DueDateTimePicker({ value, disabled, onChange }: Props) {
             type="time"
             value={parsed ? time : ""}
             disabled={disabled || !parsed}
-            className="border-input bg-background h-8 flex-1 rounded-md border px-2 text-sm"
+            className="time-input border-input bg-background h-8 flex-1 rounded-md border px-2 text-sm"
             onChange={(event) => {
               if (!selected || !event.target.value) return;
               commit(selected, event.target.value);
