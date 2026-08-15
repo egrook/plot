@@ -101,14 +101,48 @@ function parseSpaceStatus(value: unknown): "todo" | "doing" | "blocked" | "done"
   return null;
 }
 
+function isRealDueStamp(
+  year: number,
+  month: number,
+  day: number,
+  hour?: number,
+  minute?: number,
+) {
+  if (!Number.isInteger(year) || year < 1 || year > 9999) return false;
+  if (!Number.isInteger(month) || month < 1 || month > 12) return false;
+  if (!Number.isInteger(day) || day < 1 || day > 31) return false;
+  if (hour !== undefined && (!Number.isInteger(hour) || hour < 0 || hour > 23)) {
+    return false;
+  }
+  if (minute !== undefined && (!Number.isInteger(minute) || minute < 0 || minute > 59)) {
+    return false;
+  }
+  const date = new Date(year, month - 1, day, hour ?? 0, minute ?? 0);
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day &&
+    (hour === undefined || date.getHours() === hour) &&
+    (minute === undefined || date.getMinutes() === minute)
+  );
+}
+
 function parseDueOn(value: unknown): string | null {
   if (value === undefined) return null;
   if (value === null || value === "") return "";
   const raw = asString(value).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) return raw;
-  const match = raw.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
-  if (match) return `${match[1]}T${match[2]}`;
+  const dateTime = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/);
+  if (dateTime) {
+    const [, year, month, day, hour, minute] = dateTime;
+    if (!isRealDueStamp(+year, +month, +day, +hour, +minute)) return null;
+    return `${year}-${month}-${day}T${hour}:${minute}`;
+  }
+  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnly) {
+    const [, year, month, day] = dateOnly;
+    if (!isRealDueStamp(+year, +month, +day)) return null;
+    return `${year}-${month}-${day}`;
+  }
   return null;
 }
 

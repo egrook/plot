@@ -13,10 +13,37 @@ export function spaceStatusLabel(status: SpaceStatus | "") {
   return "No status";
 }
 
+function isRealDueStamp(
+  year: number,
+  month: number,
+  day: number,
+  hour?: number,
+  minute?: number,
+) {
+  if (!Number.isInteger(year) || year < 1 || year > 9999) return false;
+  if (!Number.isInteger(month) || month < 1 || month > 12) return false;
+  if (!Number.isInteger(day) || day < 1 || day > 31) return false;
+  if (hour !== undefined && (!Number.isInteger(hour) || hour < 0 || hour > 23)) {
+    return false;
+  }
+  if (minute !== undefined && (!Number.isInteger(minute) || minute < 0 || minute > 59)) {
+    return false;
+  }
+  const date = new Date(year, month - 1, day, hour ?? 0, minute ?? 0);
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day &&
+    (hour === undefined || date.getHours() === hour) &&
+    (minute === undefined || date.getMinutes() === minute)
+  );
+}
+
 export function parseDueValue(dueOn: string) {
   const dateTime = dueOn.match(DATETIME_RE);
   if (dateTime) {
     const [, year, month, day, hour, minute] = dateTime.map(Number);
+    if (!isRealDueStamp(year, month, day, hour, minute)) return null;
     return {
       date: new Date(year, month - 1, day, hour, minute),
       hasTime: true,
@@ -25,6 +52,7 @@ export function parseDueValue(dueOn: string) {
   const dateOnly = dueOn.match(DATE_RE);
   if (dateOnly) {
     const [, year, month, day] = dateOnly.map(Number);
+    if (!isRealDueStamp(year, month, day)) return null;
     return {
       date: new Date(year, month - 1, day, 23, 59),
       hasTime: false,

@@ -1009,6 +1009,28 @@ export function newPublicSlug() {
   return slug;
 }
 
+function isStoredDueOn(value: string | null | undefined) {
+  if (!value) return false;
+  const dateTime = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  const dateOnly = dateTime ? null : value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const parts = dateTime ?? dateOnly;
+  if (!parts) return false;
+  const year = Number(parts[1]);
+  const month = Number(parts[2]);
+  const day = Number(parts[3]);
+  const hour = dateTime ? Number(parts[4]) : 0;
+  const minute = dateTime ? Number(parts[5]) : 0;
+  if (dateTime && (hour > 23 || minute > 59)) return false;
+  const date = new Date(year, month - 1, day, hour, minute);
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day &&
+    date.getHours() === hour &&
+    date.getMinutes() === minute
+  );
+}
+
 export function publicNode(row: NodeRow) {
   return {
     id: row.id,
@@ -1027,9 +1049,7 @@ export function publicNode(row: NodeRow) {
       : row.status === "todo"
         ? "todo"
         : "",
-    dueOn: /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?$/.test(row.due_on ?? "")
-      ? row.due_on!
-      : "",
+    dueOn: isStoredDueOn(row.due_on) ? row.due_on! : "",
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
     deletedAt: row.deleted_at != null ? Number(row.deleted_at) : undefined,
