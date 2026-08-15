@@ -1,0 +1,74 @@
+# Example production-ish stack: Plot + Postgres + MinIO.
+# cp docker-compose.example.yml docker-compose.yml
+# cp .env.production.example .env   # then fill secrets
+# docker compose up --build
+
+services:
+  app:
+    build: .
+    ports:
+      - "3001:3001"
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      DB_BACKEND: postgres
+      DATABASE_URL: postgres://plot:plot@db:5432/plot
+      STORAGE_BACKEND: s3
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: plot
+      S3_ACCESS_KEY: plot
+      S3_SECRET_KEY: plotplotplot
+      S3_FORCE_PATH_STYLE: "true"
+      S3_PREFIX: uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: plot
+      POSTGRES_PASSWORD: plot
+      POSTGRES_DB: plot
+    volumes:
+      - plot-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U plot -d plot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: plot
+      MINIO_ROOT_PASSWORD: plotplotplot
+    volumes:
+      - plot-s3:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    restart: unless-stopped
+
+  createbucket:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 3;
+      mc alias set local http://minio:9000 plot plotplotplot;
+      mc mb -p local/plot || true;
+      exit 0;
+      "
+
+volumes:
+  plot-pg:
+  plot-s3:

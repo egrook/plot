@@ -1,0 +1,36 @@
+# dependencies / build
+node_modules
+dist
+
+# local sqlite + uploads
+data
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# env files with real values — keep only the templates
+.env
+.env.*
+!.env.example
+!.env*.example
+
+# compose files people copy and fill with secrets
+docker-compose.yml
+docker-compose.override.yml
+docker-compose.*.yml
+!docker-compose.example.yml
+
+# keys / certs
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.pub
+
+# logs / OS
+*.log
+.DS_Store
+Thumbs.db
