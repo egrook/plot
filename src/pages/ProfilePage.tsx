@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { safeAvatarSrc } from "@/lib/images";
 import { toast, toastFromError } from "@/lib/toast";
 import type { Project } from "@/types";
 
@@ -64,6 +65,8 @@ export default function ProfilePage() {
 
   if (!user) return null;
 
+  const avatarSrc = safeAvatarSrc(user.avatarUrl);
+
   async function openTrash() {
     setTrashOpen(true);
     setLoadingTrash(true);
@@ -94,7 +97,7 @@ export default function ProfilePage() {
           <CardHeader>
             <div className="flex items-center gap-4">
               <Avatar className="size-12">
-                {user.avatarUrl ? <AvatarImage src={user.avatarUrl} alt="" /> : null}
+                {avatarSrc ? <AvatarImage src={avatarSrc} alt="" /> : null}
                 <AvatarFallback className="bg-primary/15 text-primary text-sm">
                   {user.username.slice(0, 2).toUpperCase()}
                 </AvatarFallback>

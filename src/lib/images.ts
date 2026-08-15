@@ -1,5 +1,13 @@
 import { api } from "@/api";
 
+export function safeAvatarSrc(url: string | undefined) {
+  const value = (url ?? "").trim();
+  if (!value.startsWith("/api/files/")) return "";
+  const id = value.slice("/api/files/".length);
+  if (!/^[A-Za-z0-9_-]{16,64}\.(png|jpe?g|gif|webp)$/i.test(id)) return "";
+  return value;
+}
+
 export function isImageUrl(text: string) {
   const value = text.trim();
   if (!value) return false;

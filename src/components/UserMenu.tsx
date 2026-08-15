@@ -1,6 +1,7 @@
 import { LogOut, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth";
+import { safeAvatarSrc } from "@/lib/images";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +22,7 @@ export function UserMenu({
 }) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const avatarUrl = user?.avatarUrl ?? "";
+  const avatarUrl = safeAvatarSrc(user?.avatarUrl);
 
   return (
     <DropdownMenu modal={false}>
