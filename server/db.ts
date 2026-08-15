@@ -47,6 +47,8 @@ export type NodeRow = {
   width: number;
   height: number;
   border_color: string;
+  status: string;
+  due_on: string;
   created_at: number;
   updated_at: number;
   deleted_at?: number | null;
@@ -295,8 +297,8 @@ export const queries = {
   findNode: prepare("SELECT * FROM nodes WHERE id = ? AND project_id = ?"),
   listNodeTitles: prepare("SELECT title FROM nodes WHERE project_id = ?"),
   createNode: prepare(
-    `INSERT INTO nodes (id, project_id, ${typeCol}, title, content, preview, x, y, width, height, border_color, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO nodes (id, project_id, ${typeCol}, title, content, preview, x, y, width, height, border_color, status, due_on, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ),
   updateNode: prepare(
     `UPDATE nodes
@@ -308,6 +310,8 @@ export const queries = {
          width = COALESCE(?, width),
          height = COALESCE(?, height),
          border_color = COALESCE(?, border_color),
+         status = COALESCE(?, status),
+         due_on = COALESCE(?, due_on),
          updated_at = ?
      WHERE id = ? AND project_id = ?`,
   ),
@@ -428,6 +432,8 @@ function sqliteSchema() {
     width REAL NOT NULL DEFAULT 320,
     height REAL NOT NULL DEFAULT 240,
     border_color TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT '',
+    due_on TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     deleted_at INTEGER,
@@ -562,6 +568,8 @@ function postgresSchema() {
     width DOUBLE PRECISION NOT NULL DEFAULT 320,
     height DOUBLE PRECISION NOT NULL DEFAULT 240,
     border_color TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT '',
+    due_on TEXT NOT NULL DEFAULT '',
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL,
     deleted_at BIGINT
@@ -682,6 +690,8 @@ function mysqlSchema() {
     width DOUBLE NOT NULL DEFAULT 320,
     height DOUBLE NOT NULL DEFAULT 240,
     border_color VARCHAR(32) NOT NULL DEFAULT '',
+    status VARCHAR(16) NOT NULL DEFAULT '',
+    due_on VARCHAR(10) NOT NULL DEFAULT '',
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL,
     deleted_at BIGINT NULL,
@@ -835,6 +845,8 @@ async function migrateSqliteLegacy() {
     "ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE nodes ADD COLUMN deleted_at INTEGER",
     "ALTER TABLE project_public_links ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE nodes ADD COLUMN status TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE nodes ADD COLUMN due_on TEXT NOT NULL DEFAULT ''",
   ];
   for (const statement of statements) {
     try {
@@ -908,6 +920,8 @@ async function applySchema() {
             ["nodes", "border_color", "TEXT NOT NULL DEFAULT ''"],
             ["nodes", "deleted_at", "BIGINT"],
             ["project_public_links", "password_hash", "TEXT NOT NULL DEFAULT ''"],
+            ["nodes", "status", "TEXT NOT NULL DEFAULT ''"],
+            ["nodes", "due_on", "TEXT NOT NULL DEFAULT ''"],
           ]
         : [
             ["users", "avatar_url", "VARCHAR(2000) NOT NULL DEFAULT ''"],
@@ -918,6 +932,8 @@ async function applySchema() {
             ["nodes", "border_color", "VARCHAR(32) NOT NULL DEFAULT ''"],
             ["nodes", "deleted_at", "BIGINT NULL"],
             ["project_public_links", "password_hash", "VARCHAR(255) NOT NULL DEFAULT ''"],
+            ["nodes", "status", "VARCHAR(16) NOT NULL DEFAULT ''"],
+            ["nodes", "due_on", "VARCHAR(10) NOT NULL DEFAULT ''"],
           ];
     for (const [table, column, definition] of extra) {
       await addColumn(table, column, definition);
@@ -1006,6 +1022,12 @@ export function publicNode(row: NodeRow) {
     width: Number(row.width),
     height: Number(row.height),
     borderColor: row.border_color || "",
+    status: row.status === "doing" || row.status === "blocked" || row.status === "done"
+      ? row.status
+      : row.status === "todo"
+        ? "todo"
+        : "",
+    dueOn: /^\d{4}-\d{2}-\d{2}$/.test(row.due_on ?? "") ? row.due_on! : "",
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
     deletedAt: row.deleted_at != null ? Number(row.deleted_at) : undefined,

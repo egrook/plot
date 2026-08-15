@@ -46,6 +46,8 @@ import { LoadingScreen } from "@/components/LoadingScreen";
 import MarkdownNode from "@/components/MarkdownNode";
 import { BoardSearch } from "@/components/BoardSearch";
 import { ReadOnlyBoard } from "@/components/ReadOnlyBoard";
+import { SpacePlanBadges } from "@/components/SpacePlanBadges";
+import { SpacePlanFields } from "@/components/SpacePlanFields";
 import {
   SpaceTypeFilter,
   spaceKindLabel,
@@ -77,6 +79,7 @@ import {
   type ProjectGraph,
   type SpaceEdge,
   type SpaceNode,
+  type SpaceStatus,
   type SpaceType,
 } from "@/types";
 
@@ -130,6 +133,9 @@ function WorkspaceInner() {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<SpaceKindFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<SpaceStatus | "all" | "none">(
+    "all",
+  );
   const saveTimer = useRef<number | null>(null);
   const viewportTimer = useRef<number | null>(null);
   const lastSavedViewport = useRef<Viewport | null>(null);
@@ -140,6 +146,8 @@ function WorkspaceInner() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [renameColor, setRenameColor] = useState("");
+  const [renameStatus, setRenameStatus] = useState<SpaceStatus | "">("");
+  const [renameDue, setRenameDue] = useState("");
   const [imageDialog, setImageDialog] = useState<
     null | { mode: "create" } | { mode: "edit"; id: string }
   >(null);
@@ -434,6 +442,8 @@ function WorkspaceInner() {
           preview: space.preview,
           spaceType: space.type,
           borderColor: space.borderColor || "",
+          status: space.status || "",
+          dueOn: space.dueOn || "",
           onOpen: () => {
             if (space.type === "file") {
               openFileUrl(space.content);
@@ -514,12 +524,19 @@ function WorkspaceInner() {
 
   const filteredSpaces = useMemo(
     () =>
-      spaces.filter(
-        (space) =>
-          (kindFilter === "all" || space.type === kindFilter) &&
-          spaceMatchesQuery(space, query),
-      ),
-    [spaces, query, kindFilter],
+      spaces.filter((space) => {
+        if (kindFilter !== "all" && space.type !== kindFilter) return false;
+        if (statusFilter === "none" && space.status) return false;
+        if (
+          statusFilter !== "all" &&
+          statusFilter !== "none" &&
+          space.status !== statusFilter
+        ) {
+          return false;
+        }
+        return spaceMatchesQuery(space, query);
+      }),
+    [spaces, query, kindFilter, statusFilter],
   );
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
@@ -813,6 +830,20 @@ function WorkspaceInner() {
               />
             </div>
             <SpaceTypeFilter value={kindFilter} onChange={setKindFilter} />
+            <select
+              value={statusFilter}
+              className="border-input bg-background h-8 w-full rounded-md border px-2 text-xs"
+              onChange={(event) =>
+                setStatusFilter(event.target.value as typeof statusFilter)
+              }
+            >
+              <option value="all">Any status</option>
+              <option value="todo">Todo</option>
+              <option value="doing">Doing</option>
+              <option value="blocked">Blocked</option>
+              <option value="done">Done</option>
+              <option value="none">No status</option>
+            </select>
           </div>
           <div className="min-h-0 flex-1 overflow-hidden">
           <ScrollArea className="h-full px-2 pb-3">
@@ -892,6 +923,11 @@ function WorkspaceInner() {
                                   ? "File"
                                   : "Excalidraw drawing"}
                           </span>
+                          <SpacePlanBadges
+                            status={space.status}
+                            dueOn={space.dueOn}
+                            className="mt-1"
+                          />
                         </span>
                       </button>
                       <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
@@ -906,6 +942,8 @@ function WorkspaceInner() {
                             setRenamingId(space.id);
                             setRenameDraft(space.title || "");
                             setRenameColor(space.borderColor || "");
+                            setRenameStatus(space.status || "");
+                            setRenameDue(space.dueOn || "");
                           }}
                         >
                           <Pencil />
@@ -1131,6 +1169,8 @@ function WorkspaceInner() {
           node={openNode}
           saving={saving}
           onTitle={(title) => schedulePersist(openNode.id, { title })}
+          onStatus={(status) => schedulePersist(openNode.id, { status })}
+          onDueOn={(dueOn) => schedulePersist(openNode.id, { dueOn })}
           onMarkdown={(content) => schedulePersist(openNode.id, { content })}
           onDrawing={(content, preview) =>
             schedulePersist(openNode.id, { content, preview })
@@ -1393,6 +1433,8 @@ function WorkspaceInner() {
               schedulePersist(renamingId, {
                 title: renameDraft.trim() || renamingSpace?.title || "Untitled",
                 borderColor: renameColor,
+                status: renameStatus,
+                dueOn: renameDue,
               });
               setRenamingId(null);
             }}
@@ -1400,7 +1442,8 @@ function WorkspaceInner() {
             <DialogHeader>
               <DialogTitle>Edit space</DialogTitle>
               <DialogDescription>
-                Rename this card and set its border color on the board.
+                Rename this card, set a status and due date, and pick a border
+                color.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-2">
@@ -1412,6 +1455,12 @@ function WorkspaceInner() {
                 autoFocus
               />
             </div>
+            <SpacePlanFields
+              status={renameStatus}
+              dueOn={renameDue}
+              onStatus={setRenameStatus}
+              onDueOn={setRenameDue}
+            />
             <div className="space-y-2">
               <Label>Border color</Label>
               <div className="flex flex-wrap items-center gap-2">

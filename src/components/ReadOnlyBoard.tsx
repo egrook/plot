@@ -14,6 +14,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { BoardSearch } from "@/components/BoardSearch";
+import { SpacePlanBadges } from "@/components/SpacePlanBadges";
 import {
   SpaceTypeFilter,
   spaceKindLabel,
@@ -38,7 +39,7 @@ import { Separator } from "@/components/ui/separator";
 import { openFileUrl } from "@/lib/files";
 import { spaceMatchesQuery } from "@/lib/search";
 import { cn } from "@/lib/utils";
-import type { Project, SpaceEdge, SpaceNode, SpaceType } from "@/types";
+import type { Project, SpaceEdge, SpaceNode, SpaceStatus, SpaceType } from "@/types";
 
 const nodeTypes = {
   markdown: MarkdownNode,
@@ -75,6 +76,9 @@ export function ReadOnlyBoard({
   const [openId, setOpenId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<SpaceKindFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<SpaceStatus | "all" | "none">(
+    "all",
+  );
   const [imageId, setImageId] = useState<string | null>(null);
 
   const writeNodeParam = useCallback(
@@ -131,6 +135,8 @@ export function ReadOnlyBoard({
           preview: space.preview,
           spaceType: space.type,
           borderColor: space.borderColor || "",
+          status: space.status || "",
+          dueOn: space.dueOn || "",
           readOnly: true,
           onOpen: () => {
             if (space.type === "file") {
@@ -232,12 +238,19 @@ export function ReadOnlyBoard({
 
   const filteredSpaces = useMemo(
     () =>
-      spaces.filter(
-        (space) =>
-          (kindFilter === "all" || space.type === kindFilter) &&
-          spaceMatchesQuery(space, query),
-      ),
-    [spaces, query, kindFilter],
+      spaces.filter((space) => {
+        if (kindFilter !== "all" && space.type !== kindFilter) return false;
+        if (statusFilter === "none" && space.status) return false;
+        if (
+          statusFilter !== "all" &&
+          statusFilter !== "none" &&
+          space.status !== statusFilter
+        ) {
+          return false;
+        }
+        return spaceMatchesQuery(space, query);
+      }),
+    [spaces, query, kindFilter, statusFilter],
   );
 
   const openNode = spaces.find((space) => space.id === openId) ?? null;
@@ -273,6 +286,20 @@ export function ReadOnlyBoard({
               />
             </div>
             <SpaceTypeFilter value={kindFilter} onChange={setKindFilter} />
+            <select
+              value={statusFilter}
+              className="border-input bg-background h-8 w-full rounded-md border px-2 text-xs"
+              onChange={(event) =>
+                setStatusFilter(event.target.value as typeof statusFilter)
+              }
+            >
+              <option value="all">Any status</option>
+              <option value="todo">Todo</option>
+              <option value="doing">Doing</option>
+              <option value="blocked">Blocked</option>
+              <option value="done">Done</option>
+              <option value="none">No status</option>
+            </select>
           </div>
           <ScrollArea className="min-h-0 flex-1 px-2 pb-3">
             {filteredSpaces.length === 0 ? (
@@ -338,6 +365,11 @@ export function ReadOnlyBoard({
                                 ? "File"
                                 : "Excalidraw drawing"}
                         </span>
+                        <SpacePlanBadges
+                          status={space.status}
+                          dueOn={space.dueOn}
+                          className="mt-1"
+                        />
                       </span>
                     </button>
                   );
@@ -420,6 +452,8 @@ export function ReadOnlyBoard({
           saving={false}
           readOnly
           onTitle={() => undefined}
+          onStatus={() => undefined}
+          onDueOn={() => undefined}
           onMarkdown={() => undefined}
           onDrawing={() => undefined}
           onClose={() => openSpace(null)}

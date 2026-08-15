@@ -12,6 +12,7 @@ import type {
   SearchHit,
   SpaceEdge,
   SpaceNode,
+  SpaceStatus,
   SpaceType,
   User,
   Viewport,
@@ -235,6 +236,8 @@ export const api = {
       y: number;
       width?: number;
       height?: number;
+      status?: SpaceStatus | "";
+      dueOn?: string;
     },
   ) =>
     request<{ node: SpaceNode }>(`/api/projects/${projectId}/nodes`, {
@@ -253,6 +256,8 @@ export const api = {
       width: number;
       height: number;
       borderColor: string;
+      status: SpaceStatus | "";
+      dueOn: string | null;
     }>,
   ) =>
     request<{ node: SpaceNode }>(
