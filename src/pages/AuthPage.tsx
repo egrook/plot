@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { BrandMark } from "@/components/BrandMark";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -15,20 +15,30 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/auth";
 
 export default function AuthPage() {
-  const { login, register } = useAuth();
+  const { login, register, registrationEnabled } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [mode, setMode] = useState<"login" | "register">(
-    searchParams.get("mode") === "register" ? "register" : "login",
+  const [mode, setMode] = useState<"login" | "register">(() =>
+    registrationEnabled && searchParams.get("mode") === "register"
+      ? "register"
+      : "login",
   );
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    if (!registrationEnabled) setMode("login");
+  }, [registrationEnabled]);
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
+    if (mode === "register" && !registrationEnabled) {
+      setError("New accounts are disabled.");
+      return;
+    }
     setBusy(true);
     try {
       if (mode === "login") await login(username, password);
@@ -110,18 +120,24 @@ export default function AuthPage() {
                       : "Create account"}
                 </Button>
               </form>
-              <p className="text-muted-foreground mt-5 text-center text-sm">
-                {mode === "login" ? "Need an account?" : "Already have one?"}{" "}
-                <button
-                  type="button"
-                  className="text-primary font-medium hover:underline"
-                  onClick={() =>
-                    setMode(mode === "login" ? "register" : "login")
-                  }
-                >
-                  {mode === "login" ? "Create an account" : "Sign in"}
-                </button>
-              </p>
+              {registrationEnabled ? (
+                <p className="text-muted-foreground mt-5 text-center text-sm">
+                  {mode === "login" ? "Need an account?" : "Already have one?"}{" "}
+                  <button
+                    type="button"
+                    className="text-primary font-medium hover:underline"
+                    onClick={() =>
+                      setMode(mode === "login" ? "register" : "login")
+                    }
+                  >
+                    {mode === "login" ? "Create an account" : "Sign in"}
+                  </button>
+                </p>
+              ) : (
+                <p className="text-muted-foreground mt-5 text-center text-sm">
+                  New accounts are disabled.
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>

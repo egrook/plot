@@ -72,7 +72,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  me: () => request<{ user: User | null }>("/api/auth/me"),
+  me: () =>
+    request<{ user: User | null; registrationEnabled?: boolean }>("/api/auth/me"),
   register: (username: string, password: string) =>
     request<{ user: User }>("/api/auth/register", {
       method: "POST",

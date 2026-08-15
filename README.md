@@ -60,15 +60,18 @@ Put HTTPS in front (Caddy, nginx, Traefik) and set:
 NODE_ENV=production
 APP_URL=https://your.domain
 COOKIE_SECURE=true
+REGISTRATION_ENABLED=true
 ```
 
 `COOKIE_SECURE` defaults to `true` when `NODE_ENV=production`. Set it `false` only if you are serving plain HTTP.
+
+Set `REGISTRATION_ENABLED=false` to block new signups. Existing accounts can still sign in. `/api/health` reports the flag.
 
 Health check:
 
 ```bash
 curl -s http://127.0.0.1:3001/api/health
-# { "ok": true, "db": "postgres", "storage": "s3" }
+# { "ok": true, "db": "postgres", "storage": "s3", "registrationEnabled": true }
 ```
 
 Env templates:

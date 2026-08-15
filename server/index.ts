@@ -331,22 +331,34 @@ api.get("/health", async (c) => {
     ok: true,
     db: config.dbBackend,
     storage: config.storageBackend,
+    registrationEnabled: config.registrationEnabled,
   });
 });
 
 api.get("/auth/me", async (c) => {
   const user = await getSessionUser(c);
-  if (!user) return c.json({ user: null });
+  if (!user) {
+    return c.json({
+      user: null,
+      registrationEnabled: config.registrationEnabled,
+    });
+  }
   const row = await queries.findUserById.get<{
     id: string;
     username: string;
     created_at: number;
     avatar_url?: string;
   }>(user.id);
-  return c.json({ user: row ? publicUser(row) : user });
+  return c.json({
+    user: row ? publicUser(row) : user,
+    registrationEnabled: config.registrationEnabled,
+  });
 });
 
 api.post("/auth/register", async (c) => {
+  if (!config.registrationEnabled) {
+    return c.json({ error: "New accounts are disabled." }, 403);
+  }
   const body = await c.req.json().catch(() => ({}));
   const username = asString(body.username).trim();
   const password = asString(body.password);
