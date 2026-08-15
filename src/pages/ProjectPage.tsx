@@ -66,7 +66,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { openFileUrl, pickFiles } from "@/lib/files";
 import { clipboardImages, isImageUrl } from "@/lib/images";
@@ -814,8 +813,8 @@ function WorkspaceInner() {
         </div>
       </header>
 
-      <div className="grid min-h-0 grid-cols-1 md:grid-cols-[260px_1fr]">
-        <aside className="bg-sidebar hidden min-h-0 border-r md:flex md:flex-col">
+      <div className="grid min-h-0 grid-cols-1 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
+        <aside className="bg-sidebar hidden min-h-0 min-w-0 overflow-hidden border-r md:flex md:flex-col">
           <div className="shrink-0 space-y-3 p-3">
             <p className="text-muted-foreground text-xs font-medium tracking-[0.14em] uppercase">
               Spaces
@@ -845,8 +844,7 @@ function WorkspaceInner() {
               <option value="none">No status</option>
             </select>
           </div>
-          <div className="min-h-0 flex-1 overflow-hidden">
-          <ScrollArea className="h-full px-2 pb-3">
+          <div className="thin-scroll min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-3">
             {filteredSpaces.length === 0 ? (
               <p className="text-muted-foreground px-2 py-8 text-center text-sm">
                 {spaces.length === 0
@@ -870,13 +868,13 @@ function WorkspaceInner() {
                     <div
                       key={space.id}
                       className={cn(
-                        "group hover:bg-accent relative overflow-hidden rounded-lg px-1.5 py-1.5 transition-colors",
+                        "group hover:bg-accent flex min-w-0 items-start gap-0.5 rounded-lg px-1.5 py-1.5 transition-colors",
                         openId === space.id && "bg-accent",
                       )}
                     >
                       <button
                         type="button"
-                        className="flex min-w-0 w-full items-start gap-2.5 px-1 py-0.5 pr-16 text-left"
+                        className="flex min-w-0 flex-1 items-start gap-2.5 overflow-hidden px-1 py-0.5 text-left"
                         onClick={() => {
                           if (space.type === "file") {
                             focusSpace(space.id);
@@ -930,7 +928,7 @@ function WorkspaceInner() {
                           />
                         </span>
                       </button>
-                      <div className="absolute top-1.5 right-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                         <Button
                           type="button"
                           size="icon-sm"
@@ -967,7 +965,6 @@ function WorkspaceInner() {
                 })}
               </div>
             )}
-          </ScrollArea>
           </div>
           <div className="shrink-0 space-y-1 border-t p-2">
             <Button

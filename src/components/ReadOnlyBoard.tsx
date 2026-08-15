@@ -34,7 +34,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { openFileUrl } from "@/lib/files";
 import { spaceMatchesQuery } from "@/lib/search";
@@ -270,8 +269,8 @@ export function ReadOnlyBoard({
         </div>
       </header>
 
-      <div className="grid min-h-0 grid-cols-1 md:grid-cols-[260px_1fr]">
-        <aside className="bg-sidebar hidden border-r md:flex md:flex-col">
+      <div className="grid min-h-0 grid-cols-1 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
+        <aside className="bg-sidebar hidden min-w-0 overflow-hidden border-r md:flex md:flex-col">
           <div className="space-y-3 p-3">
             <p className="text-muted-foreground text-xs font-medium tracking-[0.14em] uppercase">
               Spaces
@@ -301,7 +300,7 @@ export function ReadOnlyBoard({
               <option value="none">No status</option>
             </select>
           </div>
-          <ScrollArea className="min-h-0 flex-1 px-2 pb-3">
+          <div className="thin-scroll min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-3">
             {filteredSpaces.length === 0 ? (
               <p className="text-muted-foreground px-2 py-8 text-center text-sm">
                 {spaces.length === 0
@@ -326,7 +325,7 @@ export function ReadOnlyBoard({
                       key={space.id}
                       type="button"
                       className={cn(
-                        "hover:bg-accent flex items-start gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors",
+                        "hover:bg-accent flex min-w-0 items-start gap-2.5 overflow-hidden rounded-lg px-2.5 py-1.5 text-left transition-colors",
                         (openId === space.id || imageId === space.id) && "bg-accent",
                       )}
                       onClick={() => {
@@ -376,7 +375,7 @@ export function ReadOnlyBoard({
                 })}
               </div>
             )}
-          </ScrollArea>
+          </div>
         </aside>
 
         <div className="bg-background relative min-h-0 min-w-0">
