@@ -870,13 +870,13 @@ function WorkspaceInner() {
                     <div
                       key={space.id}
                       className={cn(
-                        "group hover:bg-accent flex items-start gap-1 rounded-lg px-1.5 py-1.5 transition-colors",
+                        "group hover:bg-accent relative overflow-hidden rounded-lg px-1.5 py-1.5 transition-colors",
                         openId === space.id && "bg-accent",
                       )}
                     >
                       <button
                         type="button"
-                        className="flex min-w-0 flex-1 items-start gap-2.5 px-1 py-0.5 text-left"
+                        className="flex min-w-0 w-full items-start gap-2.5 px-1 py-0.5 pr-16 text-left"
                         onClick={() => {
                           if (space.type === "file") {
                             focusSpace(space.id);
@@ -930,7 +930,7 @@ function WorkspaceInner() {
                           />
                         </span>
                       </button>
-                      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                      <div className="absolute top-1.5 right-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                         <Button
                           type="button"
                           size="icon-sm"
