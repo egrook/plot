@@ -60,8 +60,7 @@ export default function AuthPage() {
             Plan projects on a 2D board.
           </h1>
           <p className="text-muted-foreground text-base leading-relaxed">
-            Markdown notes, Excalidraw sketches, and links between them. Data
-            stays in a local SQLite database.
+            Markdown notes, Excalidraw sketches, and links between them.
           </p>
         </div>
       </section>
