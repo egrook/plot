@@ -1604,6 +1604,14 @@ api.post("/projects/:id/nodes", async (c) => {
     asNumber(body.height) ??
     (type === "markdown" ? 280 : type === "image" ? 280 : type === "file" ? 88 : 300);
 
+  if (body.status !== undefined && parseSpaceStatus(body.status) === null) {
+    return c.json({ error: "Status must be todo, doing, blocked, or done." }, 400);
+  }
+  const rawDue = body.dueOn !== undefined ? body.dueOn : body.due_on;
+  if (rawDue !== undefined && rawDue !== null && rawDue !== "" && parseDueOn(rawDue) === null) {
+    return c.json({ error: "Due date must include a valid date and time." }, 400);
+  }
+
   await queries.createNode.run(
     id,
     project.id,
