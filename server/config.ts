@@ -76,6 +76,7 @@ export const config = {
   port: Number(readEnv("PORT", "3001") || 3001),
   appUrl: readEnv("APP_URL", isProd ? "" : "http://127.0.0.1:3001"),
   cookieSecure: asBool(readEnv("COOKIE_SECURE"), isProd),
+  registrationEnabled: asBool(readEnv("REGISTRATION_ENABLED"), true),
 
   dbBackend: dbBackend as "sqlite" | "postgres" | "mysql",
   databaseUrl,

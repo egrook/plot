@@ -6,11 +6,13 @@ import "./landing.css";
 
 function AuthButtons({
   user,
+  registrationEnabled,
   size = "default",
   signInClass,
   registerClass,
 }: {
   user: User | null;
+  registrationEnabled: boolean;
   size?: "default" | "lg";
   signInClass: string;
   registerClass: string;
@@ -28,19 +30,22 @@ function AuthButtons({
       <Link className={`${signInClass}${lg}`} to="/login">
         Sign in
       </Link>
-      <Link className={`${registerClass}${lg}`} to="/login?mode=register">
-        Create account
-      </Link>
+      {registrationEnabled ? (
+        <Link className={`${registerClass}${lg}`} to="/login?mode=register">
+          Create account
+        </Link>
+      ) : null}
     </>
   );
 }
 
-function startPath(user: User | null) {
-  return user ? "/dashboard" : "/login?mode=register";
+function startPath(user: User | null, registrationEnabled: boolean) {
+  if (user) return "/dashboard";
+  return registrationEnabled ? "/login?mode=register" : "/login";
 }
 
 export default function LandingPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, registrationEnabled } = useAuth();
 
   if (loading) return <LoadingScreen message="Opening Plot…" />;
 
@@ -77,6 +82,7 @@ export default function LandingPage() {
           <div className="nav-actions">
             <AuthButtons
               user={user}
+              registrationEnabled={registrationEnabled}
               signInClass="btn btn-ghost"
               registerClass="btn btn-primary"
             />
@@ -97,7 +103,7 @@ export default function LandingPage() {
               Each project is a desk you can pan, zoom, and grow.
             </p>
             <div className="hero-actions">
-              <Link className="btn btn-primary btn-lg" to={startPath(user)}>
+              <Link className="btn btn-primary btn-lg" to={startPath(user, registrationEnabled)}>
                 {user ? "Open your boards" : "Start a board"}
               </Link>
               <a className="btn btn-outline btn-lg" href="#product">
@@ -387,7 +393,7 @@ export default function LandingPage() {
               Projects are color-coded cards. Shared boards sit next to yours.
             </p>
             <div className="desk-grid">
-              <Link className="proj-new" to={startPath(user)}>
+              <Link className="proj-new" to={startPath(user, registrationEnabled)}>
                 <span className="plus">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path d="M12 5v14M5 12h14" />
@@ -439,11 +445,14 @@ export default function LandingPage() {
             <p>
               {user
                 ? "Your boards are waiting on the dashboard."
-                : "Create an account. A starter board is waiting."}
+                : registrationEnabled
+                  ? "Create an account. A starter board is waiting."
+                  : "Sign in to open your boards."}
             </p>
             <div className="hero-actions">
               <AuthButtons
                 user={user}
+                registrationEnabled={registrationEnabled}
                 size="lg"
                 signInClass="btn btn-outline"
                 registerClass="btn btn-primary"

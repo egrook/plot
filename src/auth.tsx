@@ -13,6 +13,7 @@ import type { User } from "./types";
 type AuthContextValue = {
   user: User | null;
   loading: boolean;
+  registrationEnabled: boolean;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -24,13 +25,18 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [registrationEnabled, setRegistrationEnabled] = useState(true);
 
   useEffect(() => {
     let alive = true;
     api
       .me()
       .then((data) => {
-        if (alive) setUser(data.user);
+        if (!alive) return;
+        setUser(data.user);
+        if (typeof data.registrationEnabled === "boolean") {
+          setRegistrationEnabled(data.registrationEnabled);
+        }
       })
       .catch(() => {
         if (alive) setUser(null);
@@ -59,8 +65,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, login, register, logout, setUser }),
-    [user, loading, login, register, logout],
+    () => ({
+      user,
+      loading,
+      registrationEnabled,
+      login,
+      register,
+      logout,
+      setUser,
+    }),
+    [user, loading, registrationEnabled, login, register, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
