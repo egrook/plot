@@ -691,7 +691,7 @@ function mysqlSchema() {
     height DOUBLE NOT NULL DEFAULT 240,
     border_color VARCHAR(32) NOT NULL DEFAULT '',
     status VARCHAR(16) NOT NULL DEFAULT '',
-    due_on VARCHAR(10) NOT NULL DEFAULT '',
+    due_on VARCHAR(32) NOT NULL DEFAULT '',
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL,
     deleted_at BIGINT NULL,
@@ -933,7 +933,7 @@ async function applySchema() {
             ["nodes", "deleted_at", "BIGINT NULL"],
             ["project_public_links", "password_hash", "VARCHAR(255) NOT NULL DEFAULT ''"],
             ["nodes", "status", "VARCHAR(16) NOT NULL DEFAULT ''"],
-            ["nodes", "due_on", "VARCHAR(10) NOT NULL DEFAULT ''"],
+            ["nodes", "due_on", "VARCHAR(32) NOT NULL DEFAULT ''"],
           ];
     for (const [table, column, definition] of extra) {
       await addColumn(table, column, definition);
@@ -1027,7 +1027,9 @@ export function publicNode(row: NodeRow) {
       : row.status === "todo"
         ? "todo"
         : "",
-    dueOn: /^\d{4}-\d{2}-\d{2}$/.test(row.due_on ?? "") ? row.due_on! : "",
+    dueOn: /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?$/.test(row.due_on ?? "")
+      ? row.due_on!
+      : "",
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
     deletedAt: row.deleted_at != null ? Number(row.deleted_at) : undefined,

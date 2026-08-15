@@ -105,8 +105,11 @@ function parseDueOn(value: unknown): string | null {
   if (value === undefined) return null;
   if (value === null || value === "") return "";
   const raw = asString(value).trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
-  return raw;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) return raw;
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+  if (match) return `${match[1]}T${match[2]}`;
+  return null;
 }
 
 function usernameOk(name: string) {
@@ -814,7 +817,7 @@ api.post("/projects/:id/duplicate", async (c) => {
       node.height,
       node.border_color,
       node.status || "todo",
-      /^\d{4}-\d{2}-\d{2}$/.test(node.due_on ?? "") ? node.due_on : "",
+      parseDueOn(node.due_on ?? "") ?? "",
       t,
       t,
     );
@@ -1619,7 +1622,7 @@ api.patch("/projects/:id/nodes/:nodeId", async (c) => {
   if (body.dueOn !== undefined || body.due_on !== undefined) {
     const rawDue = body.dueOn !== undefined ? body.dueOn : body.due_on;
     if (rawDue !== null && rawDue !== "" && parseDueOn(rawDue) === null) {
-      return c.json({ error: "Due date must be YYYY-MM-DD." }, 400);
+      return c.json({ error: "Due date must include a valid date and time." }, 400);
     }
   }
   const dueOn =

@@ -1,3 +1,4 @@
+import { DueDateTimePicker } from "@/components/DueDateTimePicker";
 import { Label } from "@/components/ui/label";
 import { SPACE_STATUSES, spaceStatusLabel } from "@/lib/plan";
 import type { SpaceStatus } from "@/types";
@@ -37,15 +38,8 @@ export function SpacePlanFields({
         </select>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="space-due">Due</Label>
-        <input
-          id="space-due"
-          type="date"
-          value={dueOn}
-          disabled={disabled}
-          className="border-input bg-background h-9 w-full rounded-md border px-2 text-sm"
-          onChange={(event) => onDueOn(event.target.value)}
-        />
+        <Label>Due</Label>
+        <DueDateTimePicker value={dueOn} disabled={disabled} onChange={onDueOn} />
       </div>
     </div>
   );
