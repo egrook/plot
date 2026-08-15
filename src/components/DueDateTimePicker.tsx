@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { CalendarIcon } from "lucide-react";
+import { useRef, useState } from "react";
+import { CalendarIcon, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -14,6 +14,7 @@ type Props = {
 
 export function DueDateTimePicker({ value, disabled, onChange }: Props) {
   const [open, setOpen] = useState(false);
+  const timeRef = useRef<HTMLInputElement>(null);
   const parsed = parseDueValue(value);
   const selected = parsed?.date;
   const time = parsed?.hasTime
@@ -58,17 +59,35 @@ export function DueDateTimePicker({ value, disabled, onChange }: Props) {
           <label className="text-muted-foreground text-xs font-medium" htmlFor="due-time">
             Time
           </label>
-          <input
-            id="due-time"
-            type="time"
-            value={parsed ? time : ""}
-            disabled={disabled || !parsed}
-            className="time-input border-input bg-background h-8 flex-1 rounded-md border px-2 text-sm"
-            onChange={(event) => {
-              if (!selected || !event.target.value) return;
-              commit(selected, event.target.value);
-            }}
-          />
+          <div className="relative min-w-0 flex-1">
+            <input
+              ref={timeRef}
+              id="due-time"
+              type="time"
+              value={parsed ? time : ""}
+              disabled={disabled || !parsed}
+              className="time-input border-input bg-background h-8 w-full rounded-md border py-0 pr-8 pl-2 text-sm"
+              onChange={(event) => {
+                if (!selected || !event.target.value) return;
+                commit(selected, event.target.value);
+              }}
+            />
+            <button
+              type="button"
+              tabIndex={-1}
+              disabled={disabled || !parsed}
+              aria-label="Show time picker"
+              className="text-muted-foreground hover:text-foreground absolute top-1/2 right-1.5 -translate-y-1/2 disabled:opacity-40"
+              onClick={() => {
+                const input = timeRef.current;
+                if (!input) return;
+                if (typeof input.showPicker === "function") input.showPicker();
+                else input.focus();
+              }}
+            >
+              <Clock className="size-3.5" />
+            </button>
+          </div>
           <Button
             type="button"
             variant="ghost"
