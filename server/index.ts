@@ -1625,7 +1625,7 @@ api.post("/projects/:id/nodes", async (c) => {
     height,
     asString(body.borderColor),
     parseSpaceStatus(body.status) ?? "todo",
-    parseDueOn(body.dueOn ?? body.due_on ?? "") ?? "",
+    parseDueOn(body.dueOn !== undefined ? body.dueOn : body.due_on ?? "") ?? "",
     t,
     t,
   );
