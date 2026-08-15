@@ -69,6 +69,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { openFileUrl, pickFiles } from "@/lib/files";
 import { clipboardImages, isImageUrl } from "@/lib/images";
+import { findSpaceByTitle } from "@/lib/wiki";
 import { spaceMatchesQuery } from "@/lib/search";
 import { toast, toastFromError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -381,6 +382,56 @@ function WorkspaceInner() {
     [id, screenToFlowPosition, writeNodeParam],
   );
 
+  const openWikiLink = useCallback(
+    async (title: string) => {
+      const trimmed = title.trim();
+      if (!trimmed || !id) return;
+      const existing = findSpaceByTitle(spaces, trimmed);
+      if (existing) {
+        if (existing.type === "file") {
+          openFileUrl(existing.content);
+          return;
+        }
+        if (existing.type === "image") {
+          setImageDialog({ mode: "edit", id: existing.id });
+          setImageUrl(existing.content);
+          writeNodeParam(existing.id);
+          return;
+        }
+        openSpace(existing.id);
+        return;
+      }
+      if (project?.permission === "view") {
+        toast.error(`No space named “${trimmed}”.`);
+        return;
+      }
+      flushSaves();
+      const source = spaces.find((space) => space.id === openId);
+      try {
+        const { node } = await api.createNode(id, {
+          type: "markdown",
+          title: trimmed,
+          x: (source?.x ?? 120) + (source?.width ?? 340) + 48,
+          y: source?.y ?? 120,
+        });
+        setSpaces((current) => [...current, node]);
+        openSpace(node.id);
+        toast.success(`Created “${node.title}”.`);
+      } catch (err) {
+        toastFromError(err, "Could not create that note.");
+      }
+    },
+    [
+      id,
+      spaces,
+      project?.permission,
+      openId,
+      openSpace,
+      writeNodeParam,
+      flushSaves,
+    ],
+  );
+
   const pickAndAddFiles = useCallback(async () => {
     try {
       const files = await pickFiles();
@@ -459,10 +510,13 @@ function WorkspaceInner() {
           onResize: (width: number, height: number) => {
             schedulePersist(space.id, { width, height });
           },
+          onWikiLink: (title: string) => {
+            void openWikiLink(title);
+          },
         },
       }));
     });
-  }, [spaces, schedulePersist, openSpace, writeNodeParam]);
+  }, [spaces, schedulePersist, openSpace, writeNodeParam, openWikiLink]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -1177,6 +1231,7 @@ function WorkspaceInner() {
             openSpace(null);
           }}
           onDelete={() => void removeSpace(openNode.id)}
+          onWikiLink={(title) => void openWikiLink(title)}
         />
       ) : null}
 

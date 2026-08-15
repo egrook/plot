@@ -536,7 +536,10 @@ api.get("/files/:id", async (c) => {
   const ext = extFromFilename(id);
   const inline = shouldInlineExt(ext);
   const filename = row.original_name.replace(/["\r\n\\]+/g, "") || `file.${ext}`;
-  return new Response(stored.file, {
+  // Bun S3File cannot be passed to `new Response(file, init)` — stream it.
+  const body =
+    typeof stored.file.stream === "function" ? stored.file.stream() : stored.file;
+  return new Response(body, {
     headers: {
       "Content-Type": inline ? row.mime : "application/octet-stream",
       "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${filename}"`,

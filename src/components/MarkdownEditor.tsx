@@ -2,12 +2,15 @@ import { useEffect, useRef } from "react";
 import MDEditor, { commands, type ICommand } from "@uiw/react-md-editor";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
+import { markdownPreviewOptions } from "@/components/MarkdownBody";
+import { pickFiles, uploadFilesToNoteMarkdown } from "@/lib/files";
 import { clipboardImages, uploadFilesToMarkdown } from "@/lib/images";
 import { toastFromError } from "@/lib/toast";
 
 type Props = {
   value: string;
   onChange: (value: string) => void;
+  onWikiLink?: (title: string) => void;
 };
 
 function insertAt(value: string, start: number, end: number, insert: string) {
@@ -29,7 +32,7 @@ function pickImageFiles() {
   });
 }
 
-export default function MarkdownEditor({ value, onChange }: Props) {
+export default function MarkdownEditor({ value, onChange, onWikiLink }: Props) {
   const valueRef = useRef(value);
   const wrapRef = useRef<HTMLDivElement>(null);
   valueRef.current = value;
@@ -50,23 +53,50 @@ export default function MarkdownEditor({ value, onChange }: Props) {
     return () => window.clearTimeout(id);
   }, []);
 
-  async function insertImages(files: File[], start: number, end: number) {
-    if (files.length === 0) return;
-    const token = `uploading-${crypto.randomUUID()}`;
-    const placeholder = `![Uploading…](${token})`;
-    onChange(insertAt(valueRef.current, start, end, placeholder));
-    try {
-      const markdown = await uploadFilesToMarkdown(files);
-      onChange(
-        valueRef.current.replace(
-          placeholder,
-          markdown || "<!-- upload failed -->",
-        ),
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Upload failed";
-      onChange(valueRef.current.replace(placeholder, `<!-- ${message} -->`));
-      toastFromError(err, "Could not upload that image.");
+  function replacePlaceholder(placeholder: string, markdown: string) {
+    const next = valueRef.current.replace(placeholder, markdown);
+    valueRef.current = next;
+    onChange(next);
+  }
+
+  async function insertUploads(images: File[], docs: File[], start: number, end: number) {
+    const jobs: { placeholder: string; run: () => Promise<string>; fail: string }[] = [];
+    if (images.length > 0) {
+      const placeholder = `![Uploading…](uploading-${crypto.randomUUID()})`;
+      jobs.push({
+        placeholder,
+        fail: "Could not upload that image.",
+        run: () => uploadFilesToMarkdown(images),
+      });
+    }
+    if (docs.length > 0) {
+      const placeholder = `[Uploading…](uploading-${crypto.randomUUID()})`;
+      jobs.push({
+        placeholder,
+        fail: "Could not upload that file.",
+        run: () => uploadFilesToNoteMarkdown(docs),
+      });
+    }
+    if (jobs.length === 0) return;
+
+    const inserted = insertAt(
+      valueRef.current,
+      start,
+      end,
+      jobs.map((job) => job.placeholder).join("\n\n"),
+    );
+    valueRef.current = inserted;
+    onChange(inserted);
+
+    for (const job of jobs) {
+      try {
+        const markdown = await job.run();
+        replacePlaceholder(job.placeholder, markdown || "<!-- upload failed -->");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Upload failed";
+        replacePlaceholder(job.placeholder, `<!-- ${message} -->`);
+        toastFromError(err, job.fail);
+      }
     }
   }
 
@@ -86,9 +116,60 @@ export default function MarkdownEditor({ value, onChange }: Props) {
     },
   };
 
-  const editorCommands = commands.getCommands().map((command) =>
-    command.name === "image" ? imageCommand : command,
-  );
+  const fileCommand: ICommand = {
+    name: "file",
+    keyCommand: "file",
+    buttonProps: { "aria-label": "Upload file", title: "Upload file" },
+    icon: (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+    execute: (_state, commandApi) => {
+      void pickFiles().then(async (files) => {
+        const docs = files.filter((file) => !file.type.startsWith("image/"));
+        if (docs.length === 0) return;
+        try {
+          const markdown = await uploadFilesToNoteMarkdown(docs);
+          if (markdown) commandApi.replaceSelection(markdown);
+        } catch (err) {
+          commandApi.replaceSelection("<!-- Upload failed -->");
+          toastFromError(err, "Could not upload that file.");
+        }
+      });
+    },
+  };
+
+  const wikiCommand: ICommand = {
+    name: "wiki",
+    keyCommand: "wiki",
+    buttonProps: { "aria-label": "Wiki link", title: "Wiki link [[note]]" },
+    icon: (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+        <text x="2" y="16" fontSize="12" fontFamily="ui-sans-serif, system-ui">
+          [[
+        </text>
+      </svg>
+    ),
+    execute: (state, commandApi) => {
+      const selected = state.selectedText || "note";
+      commandApi.replaceSelection(`[[${selected}]]`);
+    },
+  };
+
+  const editorCommands = [
+    ...commands.getCommands().map((command) =>
+      command.name === "image" ? imageCommand : command,
+    ),
+    fileCommand,
+    wikiCommand,
+  ];
 
   return (
     <div
@@ -96,8 +177,11 @@ export default function MarkdownEditor({ value, onChange }: Props) {
       className="md-wrap"
       data-color-mode="dark"
       onPaste={(event) => {
-        const files = clipboardImages(event.clipboardData);
-        if (files.length === 0) return;
+        const images = clipboardImages(event.clipboardData);
+        const docs = Array.from(event.clipboardData?.files ?? []).filter(
+          (file) => !file.type.startsWith("image/"),
+        );
+        if (images.length === 0 && docs.length === 0) return;
         event.preventDefault();
         const target = event.target as HTMLTextAreaElement;
         const start =
@@ -106,19 +190,19 @@ export default function MarkdownEditor({ value, onChange }: Props) {
             : valueRef.current.length;
         const end =
           typeof target.selectionEnd === "number" ? target.selectionEnd : start;
-        void insertImages(files, start, end);
+        void insertUploads(images, docs, start, end);
       }}
       onDragOver={(event) => {
         if (event.dataTransfer.types.includes("Files")) event.preventDefault();
       }}
       onDrop={(event) => {
-        const files = Array.from(event.dataTransfer.files).filter((file) =>
-          file.type.startsWith("image/"),
-        );
-        if (files.length === 0) return;
+        const dropped = Array.from(event.dataTransfer.files);
+        if (dropped.length === 0) return;
         event.preventDefault();
         const cursor = valueRef.current.length;
-        void insertImages(files, cursor, cursor);
+        const images = dropped.filter((file) => file.type.startsWith("image/"));
+        const docs = dropped.filter((file) => !file.type.startsWith("image/"));
+        void insertUploads(images, docs, cursor, cursor);
       }}
     >
       <MDEditor
@@ -128,9 +212,11 @@ export default function MarkdownEditor({ value, onChange }: Props) {
         visibleDragbar={false}
         height="100%"
         commands={editorCommands}
+        previewOptions={markdownPreviewOptions(onWikiLink)}
         textareaProps={{
           autoFocus: true,
-          placeholder: "Write here. Paste, drop, or upload images.",
+          placeholder:
+            "Write here. Use [[other note]] to link a space. Paste, drop, or upload images and files.",
         }}
       />
     </div>
