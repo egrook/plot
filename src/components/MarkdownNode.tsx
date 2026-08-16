@@ -1,6 +1,7 @@
-import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
+import { NodeResizer, type Node, type NodeProps } from "@xyflow/react";
 import { Maximize2 } from "lucide-react";
 import { MarkdownBody } from "@/components/MarkdownBody";
+import { NodeHandles } from "@/components/NodeHandles";
 import { SpacePlanBadges } from "@/components/SpacePlanBadges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,14 +27,7 @@ export default function MarkdownNode({ data, selected }: NodeProps<MarkdownFlowN
         color="#a1a1aa"
         onResizeEnd={(_event, params) => data.onResize(params.width, params.height)}
       />
-      {data.readOnly ? null : (
-        <>
-          <Handle className="handle" type="target" id="left" position={Position.Left} />
-          <Handle className="handle" type="source" id="right" position={Position.Right} />
-          <Handle className="handle" type="target" id="top" position={Position.Top} />
-          <Handle className="handle" type="source" id="bottom" position={Position.Bottom} />
-        </>
-      )}
+      <NodeHandles readOnly={data.readOnly} />
       <header className="flex items-center justify-between gap-2 border-b px-3 py-2">
         <div className="min-w-0">
           <Badge variant="secondary" className="text-[10px]">
