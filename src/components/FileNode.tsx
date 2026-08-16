@@ -1,5 +1,6 @@
-import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import type { Node, NodeProps } from "@xyflow/react";
 import { File } from "lucide-react";
+import { NodeHandles } from "@/components/NodeHandles";
 import { SpacePlanBadges } from "@/components/SpacePlanBadges";
 import { Badge } from "@/components/ui/badge";
 import { fileBadge, fileExtFromSpace } from "@/lib/files";
@@ -21,14 +22,7 @@ export default function FileNode({ data, selected }: NodeProps<FileFlowNode>) {
       style={data.borderColor ? { borderColor: data.borderColor } : undefined}
       onClick={data.onOpen}
     >
-      {data.readOnly ? null : (
-        <>
-          <Handle className="handle" type="target" id="left" position={Position.Left} />
-          <Handle className="handle" type="source" id="right" position={Position.Right} />
-          <Handle className="handle" type="target" id="top" position={Position.Top} />
-          <Handle className="handle" type="source" id="bottom" position={Position.Bottom} />
-        </>
-      )}
+      <NodeHandles readOnly={data.readOnly} />
       <File className="text-muted-foreground size-5 shrink-0" />
       <div className="min-w-0 flex-1">
         <h3 className="truncate text-sm font-medium leading-tight">
