@@ -7,6 +7,7 @@ Stack: **Bun + Hono** API, **Vite + React** UI, Tailwind CSS v4 + shadcn/ui.
 ## Features
 
 - Username + password accounts, profile, avatar
+- First account is admin: `/admin` to list, create, reset, or delete users
 - Dashboard of boards, personal folders, All / Mine
 - Pan/zoom canvas with markdown, Excalidraw, image, and file spaces
 - Share by username (view / edit) and public `/s/:slug` links
@@ -65,7 +66,7 @@ REGISTRATION_ENABLED=true
 
 `COOKIE_SECURE` defaults to `true` when `NODE_ENV=production`. Set it `false` only if you are serving plain HTTP.
 
-Set `REGISTRATION_ENABLED=false` to block new signups. Existing accounts can still sign in. `/api/health` reports the flag.
+Set `REGISTRATION_ENABLED=false` to block new signups. Existing accounts can still sign in. `/api/health` reports the flag. The first account in the database can still create users at `/admin`.
 
 Health check:
 

@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context, type Next } from "hono";
 import { serveStatic } from "hono/bun";
 import { config } from "./config";
 import {
@@ -27,7 +27,7 @@ import {
   type AuthEnv,
 } from "./auth";
 import { seedStarterProject } from "./seed";
-import { initStorage, openUpload, putUpload } from "./storage";
+import { deleteUpload, initStorage, openUpload, putUpload } from "./storage";
 import {
   extForMime,
   extFromFilename,
@@ -149,6 +149,49 @@ function parseDueOn(value: unknown): string | null {
 
 function usernameOk(name: string) {
   return /^[a-zA-Z0-9_]{3,32}$/.test(name);
+}
+
+async function firstAdminId() {
+  const row = await queries.findFirstUser.get<{ id: string }>();
+  return row?.id ?? null;
+}
+
+async function isAdminUser(userId: string) {
+  const adminId = await firstAdminId();
+  return Boolean(adminId && adminId === userId);
+}
+
+async function requireAdmin(c: Context<AuthEnv>, next: Next) {
+  const user = c.get("user");
+  if (!(await isAdminUser(user.id))) {
+    return c.json({ error: "Admin only." }, 403);
+  }
+  await next();
+}
+
+async function createAccount(username: string, password: string) {
+  if (!usernameOk(username)) {
+    return {
+      error: "Username must be 3–32 letters, numbers, or underscores.",
+      status: 400 as const,
+    };
+  }
+  if (password.length < 6) {
+    return { error: "Password must be at least 6 characters.", status: 400 as const };
+  }
+  if (await queries.findUserByUsername.get(username)) {
+    return { error: "That username is already taken.", status: 409 as const };
+  }
+
+  const id = crypto.randomUUID();
+  const hash = await Bun.password.hash(password, {
+    algorithm: "bcrypt",
+    cost: 10,
+  });
+  const createdAt = now();
+  await queries.createUser.run(id, username, hash, createdAt);
+  await seedStarterProject(id);
+  return { user: { id, username, created_at: createdAt } };
 }
 
 async function projectOwned(projectId: string, userId: string) {
@@ -350,8 +393,9 @@ api.get("/auth/me", async (c) => {
     created_at: number;
     avatar_url?: string;
   }>(user.id);
+  const isAdmin = await isAdminUser(user.id);
   return c.json({
-    user: row ? publicUser(row) : user,
+    user: row ? publicUser(row, isAdmin) : { ...user, avatarUrl: "", isAdmin },
     registrationEnabled: config.registrationEnabled,
   });
 });
@@ -363,31 +407,17 @@ api.post("/auth/register", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const username = asString(body.username).trim();
   const password = asString(body.password);
-
-  if (!usernameOk(username)) {
-    return c.json(
-      { error: "Username must be 3–32 letters, numbers, or underscores." },
-      400,
-    );
-  }
-  if (password.length < 6) {
-    return c.json({ error: "Password must be at least 6 characters." }, 400);
-  }
-  if (await queries.findUserByUsername.get(username)) {
-    return c.json({ error: "That username is already taken." }, 409);
+  const created = await createAccount(username, password);
+  if ("error" in created) {
+    return c.json({ error: created.error }, created.status);
   }
 
-  const id = crypto.randomUUID();
-  const hash = await Bun.password.hash(password, {
-    algorithm: "bcrypt",
-    cost: 10,
-  });
-  const createdAt = now();
-  await queries.createUser.run(id, username, hash, createdAt);
-  await seedStarterProject(id);
-  const token = await createSession(id);
+  const token = await createSession(created.user.id);
   setSessionCookie(c, token);
-  return c.json({ user: publicUser({ id, username, created_at: createdAt }) }, 201);
+  return c.json(
+    { user: publicUser(created.user, await isAdminUser(created.user.id)) },
+    201,
+  );
 });
 
 api.post("/auth/login", async (c) => {
@@ -407,7 +437,7 @@ api.post("/auth/login", async (c) => {
 
   const token = await createSession(row.id);
   setSessionCookie(c, token);
-  return c.json({ user: publicUser(row) });
+  return c.json({ user: publicUser(row, await isAdminUser(row.id)) });
 });
 
 api.post("/auth/logout", async (c) => {
@@ -436,6 +466,12 @@ api.patch("/auth/password", requireAuth, async (c) => {
     cost: 10,
   });
   await queries.updatePassword.run(hash, user.id);
+  const token = getCookie(c, SESSION_COOKIE);
+  if (token) {
+    await queries.deleteOtherSessionsForUser.run(user.id, token);
+  } else {
+    await queries.deleteSessionsForUser.run(user.id);
+  }
   return c.json({ ok: true });
 });
 
@@ -453,7 +489,88 @@ api.patch("/auth/profile", requireAuth, async (c) => {
     created_at: number;
     avatar_url?: string;
   }>(user.id);
-  return c.json({ user: row ? publicUser(row) : { ...user, avatarUrl } });
+  return c.json({
+    user: row
+      ? publicUser(row, await isAdminUser(row.id))
+      : { ...user, avatarUrl, isAdmin: await isAdminUser(user.id) },
+  });
+});
+
+api.get("/admin/users", requireAdmin, async (c) => {
+  const adminId = await firstAdminId();
+  const rows = await queries.listUsers.all<{
+    id: string;
+    username: string;
+    created_at: number;
+  }>();
+  return c.json({
+    users: rows.map((row) => ({
+      id: row.id,
+      username: row.username,
+      createdAt: Number(row.created_at),
+      isAdmin: row.id === adminId,
+    })),
+  });
+});
+
+api.post("/admin/users", requireAdmin, async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const created = await createAccount(
+    asString(body.username).trim(),
+    asString(body.password),
+  );
+  if ("error" in created) {
+    return c.json({ error: created.error }, created.status);
+  }
+  return c.json(
+    {
+      user: {
+        id: created.user.id,
+        username: created.user.username,
+        createdAt: created.user.created_at,
+        isAdmin: false,
+      },
+    },
+    201,
+  );
+});
+
+api.patch("/admin/users/:id", requireAdmin, async (c) => {
+  const id = c.req.param("id");
+  const existing = await queries.findUserById.get<{ id: string }>(id);
+  if (!existing) return c.json({ error: "User not found." }, 404);
+  const body = await c.req.json().catch(() => ({}));
+  const password = asString(body.password);
+  if (password.length < 6) {
+    return c.json({ error: "Password must be at least 6 characters." }, 400);
+  }
+  const hash = await Bun.password.hash(password, {
+    algorithm: "bcrypt",
+    cost: 10,
+  });
+  await queries.updatePassword.run(hash, id);
+  await queries.deleteSessionsForUser.run(id);
+  return c.json({ ok: true });
+});
+
+api.delete("/admin/users/:id", requireAdmin, async (c) => {
+  const id = c.req.param("id");
+  const adminId = await firstAdminId();
+  if (id === adminId) {
+    return c.json({ error: "The first account cannot be deleted." }, 400);
+  }
+  const existing = await queries.findUserById.get<{ id: string }>(id);
+  if (!existing) return c.json({ error: "User not found." }, 404);
+  const uploads = await queries.listUploadsByUser.all<{ id: string }>(id);
+  await queries.deleteUser.run(id);
+  for (const upload of uploads) {
+    try {
+      await deleteUpload(upload.id);
+    } catch {
+      // best effort; metadata is already gone
+    }
+  }
+  return c.json({ ok: true });
 });
 
 api.post("/uploads", requireAuth, async (c) => {

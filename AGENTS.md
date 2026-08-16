@@ -31,6 +31,7 @@ Runtime is Bun. SQLite, Postgres, MySQL, password hashing, and S3 come from Bun 
 | `src/auth.tsx` | session provider |
 | `src/types.ts` | shared client types |
 | `src/pages/ProjectPage.tsx` | board (largest UI file) |
+| `src/pages/AdminPage.tsx` | first-account user admin |
 | `src/components/ui/` | shadcn primitives |
 
 Client `@/` → `src/`. Server does not use that alias.
@@ -44,6 +45,7 @@ Client `@/` → `src/`. Server does not use that alias.
 - Invited **edit** (not public-link-only): board content, snapshots save/restore/delete.
 - View-only: no writes. Use `denyIfViewOnly` / `projectAccessible` / `projectOwned`. Fail closed.
 - `REGISTRATION_ENABLED` (default true): `POST /auth/register` 403 when false; UI reads it from `GET /auth/me`.
+- **Admin** is the user with the oldest `created_at`. Ids are UUIDs and are not used. No admin column. `/admin` + `/api/admin/*` are first-account only. Admin create bypasses registration lock. The first account cannot be deleted.
 
 Sharing is by exact username. Public slugs are 8-char `[a-z0-9]`.
 

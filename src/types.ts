@@ -3,6 +3,14 @@ export type User = {
   username: string;
   createdAt: number;
   avatarUrl: string;
+  isAdmin: boolean;
+};
+
+export type AdminUser = {
+  id: string;
+  username: string;
+  createdAt: number;
+  isAdmin: boolean;
 };
 
 export type Viewport = {

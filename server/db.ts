@@ -103,6 +103,13 @@ export const queries = {
     "SELECT id, username, created_at, avatar_url FROM users WHERE id = ?",
   ),
   findUserAuthById: prepare("SELECT * FROM users WHERE id = ?"),
+  findFirstUser: prepare(
+    "SELECT id FROM users ORDER BY created_at ASC LIMIT 1",
+  ),
+  listUsers: prepare(
+    "SELECT id, username, created_at FROM users ORDER BY created_at ASC",
+  ),
+  deleteUser: prepare("DELETE FROM users WHERE id = ?"),
   updatePassword: prepare("UPDATE users SET password_hash = ? WHERE id = ?"),
   updateAvatar: prepare("UPDATE users SET avatar_url = ? WHERE id = ?"),
 
@@ -115,6 +122,10 @@ export const queries = {
      WHERE s.token = ?`,
   ),
   deleteSession: prepare("DELETE FROM sessions WHERE token = ?"),
+  deleteSessionsForUser: prepare("DELETE FROM sessions WHERE user_id = ?"),
+  deleteOtherSessionsForUser: prepare(
+    "DELETE FROM sessions WHERE user_id = ? AND token != ?",
+  ),
   deleteExpiredSessions: prepare("DELETE FROM sessions WHERE expires_at < ?"),
 
   searchProjects: prepare(
@@ -352,6 +363,7 @@ export const queries = {
      VALUES (?, ?, ?, ?, ?, ?)`,
   ),
   findUpload: prepare("SELECT * FROM uploads WHERE id = ?"),
+  listUploadsByUser: prepare("SELECT id FROM uploads WHERE user_id = ?"),
 
   listSnapshots: prepare(
     `SELECT s.id, s.project_id, s.user_id, s.name, s.node_count, s.created_at,
@@ -962,17 +974,21 @@ export function now() {
   return Date.now();
 }
 
-export function publicUser(row: {
-  id: string;
-  username: string;
-  created_at: number;
-  avatar_url?: string | null;
-}) {
+export function publicUser(
+  row: {
+    id: string;
+    username: string;
+    created_at: number;
+    avatar_url?: string | null;
+  },
+  isAdmin = false,
+) {
   return {
     id: row.id,
     username: row.username,
     createdAt: Number(row.created_at),
     avatarUrl: safeAvatarUrl(row.avatar_url),
+    isAdmin,
   };
 }
 

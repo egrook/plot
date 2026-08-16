@@ -1,6 +1,7 @@
 import { toast } from "@/lib/toast";
 import type {
   AccessPermission,
+  AdminUser,
   Project,
   ProjectFolder,
   ProjectGraph,
@@ -95,6 +96,20 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
+
+  listAdminUsers: () => request<{ users: AdminUser[] }>("/api/admin/users"),
+  createAdminUser: (username: string, password: string) =>
+    request<{ user: AdminUser }>("/api/admin/users", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+  setAdminUserPassword: (id: string, password: string) =>
+    request<{ ok: true }>(`/api/admin/users/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ password }),
+    }),
+  deleteAdminUser: (id: string) =>
+    request<{ ok: true }>(`/api/admin/users/${id}`, { method: "DELETE" }),
 
   listProjects: () => request<{ projects: Project[] }>("/api/projects"),
   listFolders: () => request<{ folders: ProjectFolder[] }>("/api/folders"),
