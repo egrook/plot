@@ -298,6 +298,12 @@
   background: var(--primary) !important;
 }
 
+/* Stay in the DOM so edges can attach; hide the dots on view-only boards. */
+.react-flow__handle.handle-readonly {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 .editor-stage {
   min-height: 0;
   overflow: hidden;
@@ -327,6 +333,12 @@
   filter: invert(93%) hue-rotate(180deg) !important;
 }
 
+.md-wrap .w-md-editor {
+  /* Keep the overlay textarea and highlighted <pre> on one face.
+     Different fonts make the caret sit in the text while typing at EOL. */
+  --md-editor-font-family: var(--font-sans);
+}
+
 .md-wrap .w-md-editor,
 .md-wrap .w-md-editor-content,
 .md-wrap .w-md-editor-input,
@@ -337,11 +349,21 @@
   font-family: var(--font-sans) !important;
 }
 
+.md-wrap .w-md-editor-text,
+.md-wrap .w-md-editor-text-pre,
+.md-wrap .w-md-editor-text-pre > code,
+.md-wrap .w-md-editor-text-input {
+  font-family: var(--font-sans) !important;
+  font-size: 14px !important;
+  line-height: 18px !important;
+  letter-spacing: 0 !important;
+  font-variant-ligatures: none;
+}
+
 .md-wrap .w-md-editor-text-pre,
 .md-wrap .w-md-editor-text-pre > code {
   background: transparent !important;
   color: var(--foreground) !important;
-  font-family: var(--font-sans) !important;
 }
 
 .md-wrap .w-md-editor-text-input {
