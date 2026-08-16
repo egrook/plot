@@ -3,6 +3,7 @@ import { useAuth } from "@/auth";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { Toaster } from "@/components/Toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import AdminPage from "@/pages/AdminPage";
 import AuthPage from "@/pages/AuthPage";
 import DashboardPage from "@/pages/DashboardPage";
 import LandingPage from "@/pages/LandingPage";
@@ -14,6 +15,14 @@ function Guard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <LoadingScreen message="Opening your desk…" />;
   if (!user) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
+function AdminGuard({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingScreen message="Opening your desk…" />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!user.isAdmin) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 }
 
@@ -56,6 +65,14 @@ export default function App() {
               <Guard>
                 <ProfilePage />
               </Guard>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <AdminGuard>
+                <AdminPage />
+              </AdminGuard>
             }
           />
           <Route

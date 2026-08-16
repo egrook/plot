@@ -1,4 +1,4 @@
-import { LogOut, User } from "lucide-react";
+import { LogOut, Shield, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth";
 import { safeAvatarSrc } from "@/lib/images";
@@ -49,6 +49,12 @@ export function UserMenu({
           <User />
           Profile
         </DropdownMenuItem>
+        {user?.isAdmin ? (
+          <DropdownMenuItem onSelect={() => navigate("/admin")}>
+            <Shield />
+            Admin
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem variant="destructive" onSelect={() => onLogout()}>
           <LogOut />
           Sign out
