@@ -122,6 +122,10 @@ export const queries = {
      WHERE s.token = ?`,
   ),
   deleteSession: prepare("DELETE FROM sessions WHERE token = ?"),
+  deleteSessionsForUser: prepare("DELETE FROM sessions WHERE user_id = ?"),
+  deleteOtherSessionsForUser: prepare(
+    "DELETE FROM sessions WHERE user_id = ? AND token != ?",
+  ),
   deleteExpiredSessions: prepare("DELETE FROM sessions WHERE expires_at < ?"),
 
   searchProjects: prepare(
@@ -359,6 +363,7 @@ export const queries = {
      VALUES (?, ?, ?, ?, ?, ?)`,
   ),
   findUpload: prepare("SELECT * FROM uploads WHERE id = ?"),
+  listUploadsByUser: prepare("SELECT id FROM uploads WHERE user_id = ?"),
 
   listSnapshots: prepare(
     `SELECT s.id, s.project_id, s.user_id, s.name, s.node_count, s.created_at,

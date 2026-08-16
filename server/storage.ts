@@ -1,7 +1,9 @@
 import { mkdirSync } from "node:fs";
+import { unlink } from "node:fs/promises";
 import path from "node:path";
 import { S3Client } from "bun";
 import { config } from "./config";
+import { isSafeUploadId } from "./uploads";
 
 let s3: S3Client | null = null;
 
@@ -33,6 +35,25 @@ export function initStorage() {
 function requireS3() {
   if (!s3) throw new Error("[plot] S3 storage is not initialized.");
   return s3;
+}
+
+export async function deleteUpload(id: string) {
+  if (!isSafeUploadId(id)) return;
+  if (config.storageBackend === "local") {
+    try {
+      await unlink(localPath(id));
+    } catch (err) {
+      const code =
+        err && typeof err === "object" && "code" in err ? err.code : "";
+      if (code !== "ENOENT") throw err;
+    }
+    return;
+  }
+  try {
+    await requireS3().file(objectKey(id)).delete();
+  } catch {
+    // object already gone
+  }
 }
 
 export async function putUpload(id: string, bytes: Uint8Array, mime: string) {

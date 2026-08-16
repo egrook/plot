@@ -27,7 +27,7 @@ import {
   type AuthEnv,
 } from "./auth";
 import { seedStarterProject } from "./seed";
-import { initStorage, openUpload, putUpload } from "./storage";
+import { deleteUpload, initStorage, openUpload, putUpload } from "./storage";
 import {
   extForMime,
   extFromFilename,
@@ -466,6 +466,12 @@ api.patch("/auth/password", requireAuth, async (c) => {
     cost: 10,
   });
   await queries.updatePassword.run(hash, user.id);
+  const token = getCookie(c, SESSION_COOKIE);
+  if (token) {
+    await queries.deleteOtherSessionsForUser.run(user.id, token);
+  } else {
+    await queries.deleteSessionsForUser.run(user.id);
+  }
   return c.json({ ok: true });
 });
 
@@ -543,6 +549,7 @@ api.patch("/admin/users/:id", requireAdmin, async (c) => {
     cost: 10,
   });
   await queries.updatePassword.run(hash, id);
+  await queries.deleteSessionsForUser.run(id);
   return c.json({ ok: true });
 });
 
@@ -554,7 +561,15 @@ api.delete("/admin/users/:id", requireAdmin, async (c) => {
   }
   const existing = await queries.findUserById.get<{ id: string }>(id);
   if (!existing) return c.json({ error: "User not found." }, 404);
+  const uploads = await queries.listUploadsByUser.all<{ id: string }>(id);
   await queries.deleteUser.run(id);
+  for (const upload of uploads) {
+    try {
+      await deleteUpload(upload.id);
+    } catch {
+      // best effort; metadata is already gone
+    }
+  }
   return c.json({ ok: true });
 });
 
