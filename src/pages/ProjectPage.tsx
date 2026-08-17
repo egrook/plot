@@ -160,6 +160,8 @@ function WorkspaceInner() {
   const [spaceTrashOpen, setSpaceTrashOpen] = useState(false);
   const [trashedSpaces, setTrashedSpaces] = useState<SpaceNode[]>([]);
   const [loadingSpaceTrash, setLoadingSpaceTrash] = useState(false);
+  const [purgeSpaceId, setPurgeSpaceId] = useState<string | null>(null);
+  const [purgingSpace, setPurgingSpace] = useState(false);
 
   const writeNodeParam = useCallback(
     (nodeId: string | null) => {
@@ -721,6 +723,7 @@ function WorkspaceInner() {
   }, [searchParams, spaces, focusSpace]);
 
   const pendingSpace = spaces.find((space) => space.id === spaceToDelete);
+  const purgeTarget = trashedSpaces.find((space) => space.id === purgeSpaceId);
   const renamingSpace = spaces.find((space) => space.id === renamingId);
 
   function renameProject(name: string) {
@@ -1578,7 +1581,8 @@ function WorkspaceInner() {
           <DialogHeader>
             <DialogTitle>Trash</DialogTitle>
             <DialogDescription>
-              Spaces removed from this board stay here until you restore them.
+              Spaces removed from this board stay here until you restore or
+              remove them forever.
             </DialogDescription>
           </DialogHeader>
           {loadingSpaceTrash ? (
@@ -1621,40 +1625,53 @@ function WorkspaceInner() {
                         </p>
                       </div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        if (!id) return;
-                        void api
-                          .restoreNode(id, space.id)
-                          .then((data) => {
-                            setSpaces((current) => [...current, data.node]);
-                            setEdges((current) => [
-                              ...current,
-                              ...data.edges.map((edge) => ({
-                                id: edge.id,
-                                source: edge.source,
-                                target: edge.target,
-                                sourceHandle: edge.sourceHandle ?? undefined,
-                                targetHandle: edge.targetHandle ?? undefined,
-                                label: edge.label || undefined,
-                                type: "smoothstep" as const,
-                                animated: true,
-                              })),
-                            ]);
-                            setTrashedSpaces((current) =>
-                              current.filter((item) => item.id !== space.id),
-                            );
-                            toast.success("Space restored.");
-                          })
-                          .catch((err) => {
-                            toastFromError(err, "Could not restore that space.");
-                          });
-                      }}
-                    >
-                      Restore
-                    </Button>
+                    <div className="flex shrink-0 gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          if (!id) return;
+                          void api
+                            .restoreNode(id, space.id)
+                            .then((data) => {
+                              setSpaces((current) => [...current, data.node]);
+                              setEdges((current) => [
+                                ...current,
+                                ...data.edges.map((edge) => ({
+                                  id: edge.id,
+                                  source: edge.source,
+                                  target: edge.target,
+                                  sourceHandle: edge.sourceHandle ?? undefined,
+                                  targetHandle: edge.targetHandle ?? undefined,
+                                  label: edge.label || undefined,
+                                  type: "smoothstep" as const,
+                                  animated: true,
+                                })),
+                              ]);
+                              setTrashedSpaces((current) =>
+                                current.filter((item) => item.id !== space.id),
+                              );
+                              toast.success("Space restored.");
+                            })
+                            .catch((err) => {
+                              toastFromError(
+                                err,
+                                "Could not restore that space.",
+                              );
+                            });
+                        }}
+                      >
+                        Restore
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => setPurgeSpaceId(space.id)}
+                      >
+                        Delete forever
+                      </Button>
+                    </div>
                   </div>
                 );
               })}
@@ -1678,6 +1695,38 @@ function WorkspaceInner() {
         }}
         onConfirm={() => {
           if (spaceToDelete) void deleteSpace(spaceToDelete);
+        }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(purgeSpaceId)}
+        title="Delete forever"
+        description={
+          purgeTarget
+            ? `“${purgeTarget.title || "Untitled"}” will be permanently removed. This cannot be undone.`
+            : "This space will be permanently removed. This cannot be undone."
+        }
+        confirmLabel="Delete forever"
+        busy={purgingSpace}
+        onOpenChange={(open) => {
+          if (!open && !purgingSpace) setPurgeSpaceId(null);
+        }}
+        onConfirm={() => {
+          if (!id || !purgeSpaceId) return;
+          setPurgingSpace(true);
+          void api
+            .purgeNode(id, purgeSpaceId)
+            .then(() => {
+              setTrashedSpaces((current) =>
+                current.filter((item) => item.id !== purgeSpaceId),
+              );
+              setPurgeSpaceId(null);
+              toast.success("Space deleted forever.");
+            })
+            .catch((err) => {
+              toastFromError(err, "Could not delete that space.");
+            })
+            .finally(() => setPurgingSpace(false));
         }}
       />
     </div>

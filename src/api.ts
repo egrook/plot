@@ -294,6 +294,11 @@ export const api = {
       `/api/projects/${projectId}/nodes/${nodeId}/restore`,
       { method: "POST" },
     ),
+  purgeNode: (projectId: string, nodeId: string) =>
+    request<{ ok: true }>(
+      `/api/projects/${projectId}/nodes/${nodeId}/purge`,
+      { method: "DELETE" },
+    ),
 
   createEdge: (
     projectId: string,

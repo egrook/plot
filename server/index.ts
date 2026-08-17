@@ -1860,6 +1860,19 @@ api.post("/projects/:id/nodes/:nodeId/restore", async (c) => {
   return c.json({ node: publicNode(row), edges: edges.map(publicEdge) });
 });
 
+api.delete("/projects/:id/nodes/:nodeId/purge", async (c) => {
+  const user = c.get("user");
+  const access = await projectAccessible(c.req.param("id"), user.id);
+  if (!access) return c.json({ error: "Project not found." }, 404);
+  const denied = denyIfViewOnly(access.permission);
+  if (denied) return c.json(denied, 403);
+  const project = access.project;
+  const result = await queries.purgeNode.run(c.req.param("nodeId"), project.id);
+  if (result.changes === 0) return c.json({ error: "Nothing to delete." }, 404);
+  await touch(project.id);
+  return c.json({ ok: true });
+});
+
 api.post("/projects/:id/edges", async (c) => {
   const user = c.get("user");
   const access = await projectAccessible(c.req.param("id"), user.id);

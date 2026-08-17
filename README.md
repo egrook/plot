@@ -11,7 +11,7 @@ Stack: **Bun + Hono** API, **Vite + React** UI, Tailwind CSS v4 + shadcn/ui.
 - Dashboard of boards, personal folders, All / Mine
 - Pan/zoom canvas with markdown, Excalidraw, image, and file spaces
 - Share by username (view / edit) and public `/s/:slug` links
-- Trash + restore for boards and spaces
+- Trash, restore, and permanent delete for boards and spaces
 - Global search and in-canvas search
 - Autosave through the API
 
