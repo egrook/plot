@@ -333,6 +333,9 @@ export const queries = {
   restoreNode: prepare(
     "UPDATE nodes SET deleted_at = NULL, updated_at = ? WHERE id = ? AND project_id = ? AND deleted_at IS NOT NULL",
   ),
+  purgeNode: prepare(
+    "DELETE FROM nodes WHERE id = ? AND project_id = ? AND deleted_at IS NOT NULL",
+  ),
   listLiveEdgesForNode: prepare(
     `SELECT e.*
      FROM edges e
