@@ -16,5 +16,7 @@ COPY --from=build /app/dist ./dist
 COPY server ./server
 COPY public ./public
 RUN mkdir -p /app/data/uploads
+RUN chown -R 1000:1000 /app
+USER 1000
 EXPOSE 3001
 CMD ["bun", "server/index.ts"]

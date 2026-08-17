@@ -12,6 +12,7 @@ function objectKey(id: string) {
 }
 
 function localPath(id: string) {
+  if (!isSafeUploadId(id)) throw new Error("Invalid file path");
   return path.join(config.uploadDir, id);
 }
 
