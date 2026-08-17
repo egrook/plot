@@ -141,6 +141,8 @@ function WorkspaceInner() {
   const lastSavedViewport = useRef<Viewport | null>(null);
   const renameTimer = useRef<number | null>(null);
   const pendingPatch = useRef<Record<string, Partial<SpaceNode>>>({});
+  const persistEpoch = useRef<Record<string, number>>({});
+  const savesInFlight = useRef(0);
   const [spaceToDelete, setSpaceToDelete] = useState<string | null>(null);
   const [deletingSpace, setDeletingSpace] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -191,19 +193,29 @@ function WorkspaceInner() {
   const persistNode = useCallback(
     async (nodeId: string, patch: Partial<SpaceNode>) => {
       if (!id) return;
+      const epoch = (persistEpoch.current[nodeId] ?? 0) + 1;
+      persistEpoch.current[nodeId] = epoch;
+      savesInFlight.current += 1;
       setSaving(true);
       try {
         const { node } = await api.updateNode(id, nodeId, {
           ...patch,
           preview: patch.preview === null ? "" : patch.preview,
         });
+        if (persistEpoch.current[nodeId] !== epoch) return;
         setSpaces((current) =>
-          current.map((item) => (item.id === node.id ? { ...item, ...node } : item)),
+          current.map((item) => {
+            if (item.id !== node.id) return item;
+            const pending = pendingPatch.current[node.id];
+            // Keep keystrokes that landed after this request left.
+            return pending ? { ...item, ...node, ...pending } : { ...item, ...node };
+          }),
         );
       } catch (err) {
         toastFromError(err, "Could not save that change.");
       } finally {
-        setSaving(false);
+        savesInFlight.current -= 1;
+        if (savesInFlight.current === 0) setSaving(false);
       }
     },
     [id],

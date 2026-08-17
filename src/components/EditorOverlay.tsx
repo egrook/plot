@@ -98,6 +98,7 @@ export default function EditorOverlay({
             )
           ) : (
             <MarkdownEditor
+              key={node.id}
               value={node.content}
               onChange={onMarkdown}
               onWikiLink={onWikiLink}

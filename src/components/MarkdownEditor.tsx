@@ -34,8 +34,18 @@ function pickImageFiles() {
 
 export default function MarkdownEditor({ value, onChange, onWikiLink }: Props) {
   const valueRef = useRef(value);
+  const emittedRef = useRef(value);
   const wrapRef = useRef<HTMLDivElement>(null);
-  valueRef.current = value;
+
+  function emit(next: string) {
+    emittedRef.current = next;
+    valueRef.current = next;
+    onChange(next);
+  }
+
+  // Ignore a stale parent value (save response) so the textarea is not reset.
+  const editorValue = value === emittedRef.current ? value : emittedRef.current;
+  valueRef.current = editorValue;
 
   useEffect(() => {
     function focusWriter() {
@@ -54,9 +64,7 @@ export default function MarkdownEditor({ value, onChange, onWikiLink }: Props) {
   }, []);
 
   function replacePlaceholder(placeholder: string, markdown: string) {
-    const next = valueRef.current.replace(placeholder, markdown);
-    valueRef.current = next;
-    onChange(next);
+    emit(valueRef.current.replace(placeholder, markdown));
   }
 
   async function insertUploads(images: File[], docs: File[], start: number, end: number) {
@@ -85,8 +93,7 @@ export default function MarkdownEditor({ value, onChange, onWikiLink }: Props) {
       end,
       jobs.map((job) => job.placeholder).join("\n\n"),
     );
-    valueRef.current = inserted;
-    onChange(inserted);
+    emit(inserted);
 
     for (const job of jobs) {
       try {
@@ -206,8 +213,8 @@ export default function MarkdownEditor({ value, onChange, onWikiLink }: Props) {
       }}
     >
       <MDEditor
-        value={value}
-        onChange={(next) => onChange(next ?? "")}
+        value={editorValue}
+        onChange={(next) => emit(next ?? "")}
         preview="live"
         visibleDragbar={false}
         height="100%"
