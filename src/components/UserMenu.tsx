@@ -27,7 +27,7 @@ export function UserMenu({
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="h-9 gap-2 px-1.5">
+        <Button variant="ghost" className="h-9 shrink-0 gap-2 px-1.5">
           <Avatar className="size-7">
             {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
             <AvatarFallback className="bg-primary/15 text-primary text-[11px]">

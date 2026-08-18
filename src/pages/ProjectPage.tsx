@@ -786,34 +786,42 @@ function WorkspaceInner() {
         spaces={spaces}
         edges={graphEdges}
         headerLeft={
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/dashboard">
+          <Button asChild variant="ghost" size="sm" className="shrink-0 px-2 sm:px-2.5">
+            <Link to="/dashboard" aria-label="Projects">
               <ArrowLeft />
-              Projects
+              <span className="hidden sm:inline">Projects</span>
             </Link>
           </Button>
         }
         headerRight={
           <>
             {project.role === "shared" ? (
-              <Badge variant="outline">Shared by {project.ownerUsername}</Badge>
+              <Badge variant="outline" className="hidden max-w-[9rem] truncate sm:inline-flex">
+                Shared by {project.ownerUsername}
+              </Badge>
             ) : null}
             <Button
               variant="outline"
               size="sm"
+              className="shrink-0"
               disabled={duplicating}
+              aria-label={duplicating ? "Copying…" : "Duplicate"}
+              title={duplicating ? "Copying…" : "Duplicate"}
               onClick={() => void duplicateBoard()}
             >
               <Copy />
-              {duplicating ? "Copying…" : "Duplicate"}
+              <span className="hidden sm:inline">{duplicating ? "Copying…" : "Duplicate"}</span>
             </Button>
             <Button
               variant="outline"
               size="sm"
+              className="shrink-0"
+              aria-label="Versions"
+              title="Versions"
               onClick={() => setVersionsOpen(true)}
             >
               <History />
-              Versions
+              <span className="hidden sm:inline">Versions</span>
             </Button>
             <UserMenu
               username={user?.username ?? ""}
@@ -835,44 +843,53 @@ function WorkspaceInner() {
 
   return (
     <div className="grid h-full grid-rows-[56px_1fr] overflow-hidden">
-      <header className="bg-background/90 flex items-center justify-between gap-3 border-b px-3 backdrop-blur-md">
-        <div className="flex min-w-0 items-center gap-2">
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/dashboard">
+      <header className="bg-background/90 flex min-w-0 items-center justify-between gap-2 border-b px-2 backdrop-blur-md sm:gap-3 sm:px-3">
+        <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
+          <Button asChild variant="ghost" size="sm" className="shrink-0 px-2 sm:px-2.5">
+            <Link to="/dashboard" aria-label="Projects">
               <ArrowLeft />
-              Projects
+              <span className="hidden sm:inline">Projects</span>
             </Link>
           </Button>
-          <Separator orientation="vertical" className="h-5" />
+          <Separator orientation="vertical" className="hidden h-5 sm:block" />
           <Input
             value={project.name}
+            aria-label="Project name"
             onChange={(e) => renameProject(e.target.value)}
-            className="font-serif h-8 max-w-xs border-transparent bg-transparent text-base shadow-none focus-visible:border-input focus-visible:bg-input/30"
+            className="font-serif h-8 min-w-0 flex-1 max-w-xs border-transparent bg-transparent text-base shadow-none focus-visible:border-input focus-visible:bg-input/30"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           {project.role === "shared" ? (
-            <Badge variant="secondary">Shared by {project.ownerUsername}</Badge>
+            <Badge variant="secondary" className="hidden max-w-[9rem] truncate sm:inline-flex">
+              Shared by {project.ownerUsername}
+            </Badge>
           ) : (
             <Button
               variant="outline"
               size="sm"
+              className="shrink-0"
+              aria-label="Share"
+              title="Share"
               onClick={() => setShareOpen(true)}
             >
               <Share2 />
-              Share
+              <span className="hidden sm:inline">Share</span>
             </Button>
           )}
           <Button
             variant="outline"
             size="sm"
+            className="shrink-0"
             disabled={duplicating}
+            aria-label={duplicating ? "Copying…" : "Duplicate"}
+            title={duplicating ? "Copying…" : "Duplicate"}
             onClick={() => void duplicateBoard()}
           >
             <Copy />
-            {duplicating ? "Copying…" : "Duplicate"}
+            <span className="hidden sm:inline">{duplicating ? "Copying…" : "Duplicate"}</span>
           </Button>
-          <Badge variant={saving ? "secondary" : "outline"}>
+          <Badge variant={saving ? "secondary" : "outline"} className="hidden sm:inline-flex">
             {saving ? "Saving…" : "Saved"}
           </Badge>
           <UserMenu
@@ -1189,37 +1206,61 @@ function WorkspaceInner() {
                       : "oklch(0.45 0 0)"
               }
             />
-            <Panel position="top-left">
-              <div className="bg-card/95 flex items-center gap-2 rounded-xl border p-1.5 shadow-lg backdrop-blur">
-                <Button size="sm" variant="secondary" onClick={() => addSpace("markdown")}>
-                  <Plus />
-                  Note
-                </Button>
-                <Button size="sm" variant="secondary" onClick={() => addSpace("excalidraw")}>
-                  <Plus />
-                  Drawing
+            <Panel position="top-left" className="!m-2 max-w-[calc(100%-4.25rem)] sm:!m-[15px] sm:max-w-none">
+              <div className="bg-card/95 flex items-center gap-1 rounded-xl border p-1 shadow-lg backdrop-blur sm:gap-2 sm:p-1.5">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  aria-label="Add note"
+                  title="Add note"
+                  onClick={() => addSpace("markdown")}
+                >
+                  <FileText className="sm:hidden" />
+                  <Plus className="hidden sm:block" />
+                  <span className="hidden sm:inline">Note</span>
                 </Button>
                 <Button
                   size="sm"
                   variant="secondary"
+                  aria-label="Add drawing"
+                  title="Add drawing"
+                  onClick={() => addSpace("excalidraw")}
+                >
+                  <PenLine className="sm:hidden" />
+                  <Plus className="hidden sm:block" />
+                  <span className="hidden sm:inline">Drawing</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  aria-label="Add image"
+                  title="Add image"
                   onClick={() => {
                     setImageDialog({ mode: "create" });
                     setImageUrl("");
                   }}
                 >
-                  <Plus />
-                  Image
+                  <ImageIcon className="sm:hidden" />
+                  <Plus className="hidden sm:block" />
+                  <span className="hidden sm:inline">Image</span>
                 </Button>
-                <Button size="sm" variant="secondary" onClick={() => void pickAndAddFiles()}>
-                  <Plus />
-                  File
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  aria-label="Add file"
+                  title="Add file"
+                  onClick={() => void pickAndAddFiles()}
+                >
+                  <FileIcon className="sm:hidden" />
+                  <Plus className="hidden sm:block" />
+                  <span className="hidden sm:inline">File</span>
                 </Button>
                 <span className="text-muted-foreground hidden px-2 text-xs sm:inline">
                   N note · D drawing · I image · F file · ⌘F search
                 </span>
               </div>
             </Panel>
-            <Panel position="top-right">
+            <Panel position="top-right" className="!m-2 max-w-[calc(100%-1rem)] sm:!m-[15px]">
               <BoardSearch
                 spaces={spaces}
                 onJump={jumpToSpace}

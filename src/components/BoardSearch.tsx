@@ -81,10 +81,11 @@ export function BoardSearch({ spaces, onJump, enabled = true }: Props) {
           size="sm"
           variant="secondary"
           className="bg-card/95 shadow-lg backdrop-blur"
+          aria-label="Search"
           onClick={() => setOpen(true)}
         >
           <Search />
-          Search
+          <span className="hidden sm:inline">Search</span>
           <kbd className="text-muted-foreground ml-1 hidden rounded border px-1 py-px font-mono text-[10px] sm:inline">
             ⌘F
           </kbd>
@@ -94,7 +95,7 @@ export function BoardSearch({ spaces, onJump, enabled = true }: Props) {
   }
 
   return (
-    <div ref={rootRef} className="nodrag nopan nowheel w-[min(22rem,calc(100vw-2rem))]">
+    <div ref={rootRef} className="nodrag nopan nowheel w-[min(22rem,calc(100dvw-1.5rem))] sm:w-[min(22rem,calc(100vw-2rem))]">
       <div className="bg-card/95 rounded-xl border shadow-lg backdrop-blur">
         <div className="flex items-center gap-1 p-1.5">
           <div className="relative min-w-0 flex-1">

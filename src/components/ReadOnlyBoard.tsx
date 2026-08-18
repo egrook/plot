@@ -280,14 +280,16 @@ export function ReadOnlyBoard({
 
   return (
     <div className="grid h-full grid-rows-[56px_1fr] overflow-hidden">
-      <header className="bg-background/90 flex items-center justify-between gap-3 border-b px-3 backdrop-blur-md">
-        <div className="flex min-w-0 items-center gap-2">
+      <header className="bg-background/90 flex min-w-0 items-center justify-between gap-2 border-b px-2 backdrop-blur-md sm:gap-3 sm:px-3">
+        <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
           {headerLeft}
-          {headerLeft ? <Separator orientation="vertical" className="h-5" /> : null}
-          <h1 className="truncate text-base font-medium">{project.name}</h1>
+          {headerLeft ? <Separator orientation="vertical" className="hidden h-5 sm:block" /> : null}
+          <h1 className="min-w-0 truncate text-base font-medium">{project.name}</h1>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary">View only</Badge>
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <Badge variant="secondary" className="hidden sm:inline-flex">
+            View only
+          </Badge>
           {headerRight}
         </div>
       </header>
@@ -457,7 +459,7 @@ export function ReadOnlyBoard({
                       : "oklch(0.45 0 0)"
               }
             />
-            <Panel position="top-right">
+            <Panel position="top-right" className="!m-2 max-w-[calc(100%-1rem)] sm:!m-[15px]">
               <BoardSearch
                 spaces={spaces}
                 onJump={jumpToSpace}
